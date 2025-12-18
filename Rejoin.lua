@@ -222,7 +222,7 @@ local function createLogViewer()
         closePlayerBtn.Position = UDim2.new(0.51, 0, 1, -40)
         closePlayerBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
         closePlayerBtn.BorderSizePixel = 0
-        closePlayerBtn.Text = "❌ CLOSE"
+        closePlayerBtn.Text = "✖️ CLOSE"
         closePlayerBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
         closePlayerBtn.TextSize = 13
         closePlayerBtn.Font = Enum.Font.GothamBold
@@ -248,7 +248,7 @@ local function createLogViewer()
         -- Title Log Frame
         local title = Instance.new("TextLabel")
         title.Name = "Title"
-        title.Size = UDim2.new(1, -60, 0, 30) -- DIUBAH: Dikurangi biar ada space untuk button
+        title.Size = UDim2.new(1, -60, 0, 30)
         title.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
         title.BorderSizePixel = 0
         title.Text = "Fish It Utility - LOG VIEWER"
@@ -257,14 +257,14 @@ local function createLogViewer()
         title.Font = Enum.Font.GothamBold
         title.Parent = frame
         
-        -- BARU: Button Minimize (-) di pojok kanan atas
+        -- Button Minimize (➖) di pojok kanan atas
         local minimizeBtn = Instance.new("TextButton")
         minimizeBtn.Name = "MinimizeButton"
         minimizeBtn.Size = UDim2.new(0, 30, 0, 30)
         minimizeBtn.Position = UDim2.new(1, -60, 0, 0)
         minimizeBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
         minimizeBtn.BorderSizePixel = 0
-        minimizeBtn.Text = "—"
+        minimizeBtn.Text = "➖"
         minimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
         minimizeBtn.TextSize = 18
         minimizeBtn.Font = Enum.Font.GothamBold
@@ -275,14 +275,14 @@ local function createLogViewer()
             log("📦 Menu minimized", "info")
         end)
         
-        -- BARU: Button Exit (X) di pojok kanan atas
+        -- Button Exit (✖️) di pojok kanan atas
         local exitBtn = Instance.new("TextButton")
         exitBtn.Name = "ExitButton"
         exitBtn.Size = UDim2.new(0, 30, 0, 30)
         exitBtn.Position = UDim2.new(1, -30, 0, 0)
         exitBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
         exitBtn.BorderSizePixel = 0
-        exitBtn.Text = "✕"
+        exitBtn.Text = "✖️"
         exitBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
         exitBtn.TextSize = 16
         exitBtn.Font = Enum.Font.GothamBold
@@ -371,14 +371,14 @@ local function createLogViewer()
             end
         end)
         
-        -- Button: Close (sekarang jadi minimize aja)
+        -- Button: Close (minimize)
         local closeBtn = Instance.new("TextButton")
         closeBtn.Name = "CloseButton"
         closeBtn.Size = UDim2.new(0.32, -2, 0, 35)
         closeBtn.Position = UDim2.new(0.67, 0, 1, -40)
         closeBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
         closeBtn.BorderSizePixel = 0
-        closeBtn.Text = "—"
+        closeBtn.Text = "➖"
         closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
         closeBtn.TextSize = 20
         closeBtn.Font = Enum.Font.GothamBold
@@ -389,7 +389,7 @@ local function createLogViewer()
             log("📦 Menu minimized", "info")
         end)
         
-        -- DIUBAH: Button Toggle sekarang bisa di-drag
+        -- Button Toggle yang bisa di-drag
         local toggleBtn = Instance.new("TextButton")
         toggleBtn.Name = "ToggleButton"
         toggleBtn.Size = UDim2.new(0, 80, 0, 30)
@@ -402,8 +402,8 @@ local function createLogViewer()
         toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
         toggleBtn.TextSize = 12
         toggleBtn.Font = Enum.Font.GothamBold
-        toggleBtn.Active = true -- BARU: Ini penting!
-        toggleBtn.Draggable = true -- BARU: Ini yang bikin bisa di-drag!
+        toggleBtn.Active = true
+        toggleBtn.Draggable = true
         toggleBtn.Parent = screenGui
         
         toggleBtn.MouseButton1Click:Connect(function()
