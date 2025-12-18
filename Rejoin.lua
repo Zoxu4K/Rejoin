@@ -1,83 +1,42 @@
--- Fish It Auto Rejoin Utility - MOBILE VERSION WITH IN-GAME LOG VIEWER
+-- Fish It Auto Rejoin Utility - ENHANCED VERSION
+-- Features: Server Type Detection, Totem Detector, Player Teleport
 -- Compatible with Delta Executor
--- Auto rejoin setiap 3 detik
 
 local TeleportService = game:GetService("TeleportService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local HttpService = game:GetService("HttpService")
+local Workspace = game:GetService("Workspace")
 
 -- Konfigurasi
-local REJOIN_INTERVAL = 20 -- 3 detik
+local REJOIN_INTERVAL = 20
 local AUTO_EXECUTE = true
-local IS_RUNNING = true -- Status auto hop (true = jalan, false = stop)
+local IS_RUNNING = true
+local CURRENT_SERVER_TYPE = "Unknown" -- "Public" atau "Private"
 
 -- LOG STORAGE
 local LOG_HISTORY = {}
 local MAX_LOGS = 100
 
--- Logging function dengan penyimpanan
+-- TOTEM STORAGE
+local DETECTED_TOTEMS = {}
+local TOTEM_SCAN_INTERVAL = 5 -- Scan setiap 5 detik
+
+-- Logging function
 local function log(message, type)
     local timestamp = os.date("%H:%M:%S")
     local prefix = "[" .. timestamp .. "]"
     local fullMessage = prefix .. " " .. message
     
-    -- Simpan ke history
     table.insert(LOG_HISTORY, fullMessage)
     if #LOG_HISTORY > MAX_LOGS then
         table.remove(LOG_HISTORY, 1)
     end
     
-    -- Print ke console
     if type == "error" then
         warn(fullMessage)
     else
         print(fullMessage)
-    end
-end
-
--- Fungsi untuk kirim log ke webhook Discord (OPTIONAL - ganti URL kalau mau pakai)
-local function sendLogToWebhook(logText)
-    local WEBHOOK_URL = "" -- ISI DENGAN DISCORD WEBHOOK URL KALAU MAU
-    
-    if WEBHOOK_URL ~= "" then
-        local success, err = pcall(function()
-            local data = {
-                ["content"] = "```" .. logText .. "```"
-            }
-            request({
-                Url = WEBHOOK_URL,
-                Method = "POST",
-                Headers = {
-                    ["Content-Type"] = "application/json"
-                },
-                Body = HttpService:JSONEncode(data)
-            })
-        end)
-        
-        if success then
-            log("✅ Log sent to Discord webhook", "success")
-        else
-            log("❌ Failed to send log to webhook: " .. tostring(err), "error")
-        end
-    end
-end
-
--- Fungsi untuk save log ke clipboard (setclipboard)
-local function saveLogToClipboard()
-    local fullLog = table.concat(LOG_HISTORY, "\n")
-    
-    local success, err = pcall(function()
-        setclipboard(fullLog)
-    end)
-    
-    if success then
-        log("✅ LOG COPIED TO CLIPBOARD!", "success")
-        createNotification("✅ Success", "Log copied to clipboard! Paste di notes", 5)
-        return true
-    else
-        log("❌ Failed to copy to clipboard: " .. tostring(err), "error")
-        return false
     end
 end
 
@@ -93,30 +52,249 @@ local function createNotification(title, text, duration)
     end)
 end
 
--- CREATE IN-GAME LOG VIEWER GUI
-local function createLogViewer()
-    log("Creating in-game log viewer GUI...", "info")
+-- Fungsi untuk save log ke clipboard
+local function saveLogToClipboard()
+    local fullLog = table.concat(LOG_HISTORY, "\n")
     
     local success, err = pcall(function()
-        -- Create ScreenGui
+        setclipboard(fullLog)
+    end)
+    
+    if success then
+        log("✅ LOG COPIED TO CLIPBOARD!", "success")
+        createNotification("✅ Success", "Log copied to clipboard!", 5)
+        return true
+    else
+        log("❌ Failed to copy to clipboard: " .. tostring(err), "error")
+        return false
+    end
+end
+
+-- Fungsi untuk deteksi server type (Public/Private)
+local function detectServerType()
+    local success, result = pcall(function()
+        -- Check jika server ini Private (VIP server atau reserved server)
+        if game.PrivateServerId ~= "" and game.PrivateServerOwnerId ~= 0 then
+            return "Private"
+        else
+            return "Public"
+        end
+    end)
+    
+    if success then
+        CURRENT_SERVER_TYPE = result
+        log("🔍 Server Type Detected: " .. result, "success")
+        return result
+    else
+        log("⚠️ Failed to detect server type: " .. tostring(result), "warning")
+        CURRENT_SERVER_TYPE = "Unknown"
+        return "Unknown"
+    end
+end
+
+-- Fungsi untuk scan totem di workspace
+local function scanTotems()
+    DETECTED_TOTEMS = {}
+    
+    local success, err = pcall(function()
+        -- Scan untuk model bernama "Totem" atau yang mengandung kata "Totem"
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if obj:IsA("Model") or obj:IsA("Part") then
+                local objName = obj.Name:lower()
+                
+                -- Deteksi totem (sesuaikan dengan nama totem di game Fish It)
+                if objName:find("totem") or objName:find("rod") or obj:FindFirstChild("Totem") then
+                    local position = nil
+                    
+                    if obj:IsA("Model") and obj:FindFirstChild("HumanoidRootPart") then
+                        position = obj.HumanoidRootPart.Position
+                    elseif obj:IsA("Model") and obj.PrimaryPart then
+                        position = obj.PrimaryPart.Position
+                    elseif obj:IsA("Part") then
+                        position = obj.Position
+                    end
+                    
+                    if position then
+                        local distance = (LocalPlayer.Character.HumanoidRootPart.Position - position).Magnitude
+                        
+                        table.insert(DETECTED_TOTEMS, {
+                            name = obj.Name,
+                            object = obj,
+                            position = position,
+                            distance = distance,
+                            timestamp = tick()
+                        })
+                    end
+                end
+            end
+        end
+        
+        -- Sort by distance (terdekat dulu)
+        table.sort(DETECTED_TOTEMS, function(a, b)
+            return a.distance < b.distance
+        end)
+    end)
+    
+    if success then
+        log("🔍 Totem Scan Complete: Found " .. #DETECTED_TOTEMS .. " totems", "success")
+    else
+        log("❌ Totem Scan Failed: " .. tostring(err), "error")
+    end
+    
+    return #DETECTED_TOTEMS
+end
+
+-- CREATE IN-GAME GUI
+local function createGUI()
+    log("Creating enhanced GUI...", "info")
+    
+    local success, err = pcall(function()
         local screenGui = Instance.new("ScreenGui")
-        screenGui.Name = "FishItLogViewer"
+        screenGui.Name = "FishItEnhancedGUI"
         screenGui.ResetOnSpawn = false
         screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
         
-        -- Create Frame (Log Window)
-        local frame = Instance.new("Frame")
-        frame.Name = "LogFrame"
-        frame.Size = UDim2.new(0, 400, 0, 300)
-        frame.Position = UDim2.new(0.5, -200, 0.5, -150)
-        frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-        frame.BorderSizePixel = 2
-        frame.BorderColor3 = Color3.fromRGB(255, 255, 255)
-        frame.Active = true
-        frame.Draggable = true
-        frame.Parent = screenGui
+        -- ==================== LOG FRAME ====================
+        local logFrame = Instance.new("Frame")
+        logFrame.Name = "LogFrame"
+        logFrame.Size = UDim2.new(0, 400, 0, 300)
+        logFrame.Position = UDim2.new(0.5, -200, 0.5, -150)
+        logFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+        logFrame.BorderSizePixel = 2
+        logFrame.BorderColor3 = Color3.fromRGB(255, 255, 255)
+        logFrame.Active = true
+        logFrame.Draggable = true
+        logFrame.Parent = screenGui
         
-        -- Create Frame (Player List Window)
+        local logTitle = Instance.new("TextLabel")
+        logTitle.Size = UDim2.new(1, 0, 0, 30)
+        logTitle.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        logTitle.Text = "📊 LOG VIEWER - Server: " .. CURRENT_SERVER_TYPE
+        logTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+        logTitle.TextSize = 13
+        logTitle.Font = Enum.Font.GothamBold
+        logTitle.Parent = logFrame
+        
+        local logScroll = Instance.new("ScrollingFrame")
+        logScroll.Size = UDim2.new(1, -10, 1, -80)
+        logScroll.Position = UDim2.new(0, 5, 0, 35)
+        logScroll.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+        logScroll.ScrollBarThickness = 8
+        logScroll.Parent = logFrame
+        
+        local logText = Instance.new("TextLabel")
+        logText.Size = UDim2.new(1, -10, 1, 0)
+        logText.Position = UDim2.new(0, 5, 0, 0)
+        logText.BackgroundTransparency = 1
+        logText.Text = "Waiting for logs..."
+        logText.TextColor3 = Color3.fromRGB(255, 255, 255)
+        logText.TextSize = 11
+        logText.Font = Enum.Font.Code
+        logText.TextXAlignment = Enum.TextXAlignment.Left
+        logText.TextYAlignment = Enum.TextYAlignment.Top
+        logText.TextWrapped = true
+        logText.Parent = logScroll
+        
+        -- ==================== TOTEM FRAME ====================
+        local totemFrame = Instance.new("Frame")
+        totemFrame.Name = "TotemFrame"
+        totemFrame.Size = UDim2.new(0, 350, 0, 400)
+        totemFrame.Position = UDim2.new(0.5, -175, 0.5, -200)
+        totemFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+        totemFrame.BorderSizePixel = 2
+        totemFrame.BorderColor3 = Color3.fromRGB(100, 200, 255)
+        totemFrame.Active = true
+        totemFrame.Draggable = true
+        totemFrame.Visible = false
+        totemFrame.Parent = screenGui
+        
+        local totemTitle = Instance.new("TextLabel")
+        totemTitle.Size = UDim2.new(1, 0, 0, 30)
+        totemTitle.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        totemTitle.Text = "🗿 TOTEM DETECTOR"
+        totemTitle.TextColor3 = Color3.fromRGB(100, 200, 255)
+        totemTitle.TextSize = 14
+        totemTitle.Font = Enum.Font.GothamBold
+        totemTitle.Parent = totemFrame
+        
+        local totemScroll = Instance.new("ScrollingFrame")
+        totemScroll.Size = UDim2.new(1, -10, 1, -80)
+        totemScroll.Position = UDim2.new(0, 5, 0, 35)
+        totemScroll.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+        totemScroll.ScrollBarThickness = 8
+        totemScroll.Parent = totemFrame
+        
+        local totemListLayout = Instance.new("UIListLayout")
+        totemListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        totemListLayout.Padding = UDim.new(0, 5)
+        totemListLayout.Parent = totemScroll
+        
+        -- Function refresh totem list
+        local function refreshTotemList()
+            for _, child in pairs(totemScroll:GetChildren()) do
+                if child:IsA("Frame") then
+                    child:Destroy()
+                end
+            end
+            
+            scanTotems()
+            
+            if #DETECTED_TOTEMS == 0 then
+                local noTotemLabel = Instance.new("TextLabel")
+                noTotemLabel.Size = UDim2.new(1, 0, 0, 50)
+                noTotemLabel.BackgroundTransparency = 1
+                noTotemLabel.Text = "⚠️ No totems detected nearby"
+                noTotemLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+                noTotemLabel.TextSize = 12
+                noTotemLabel.Font = Enum.Font.Gotham
+                noTotemLabel.Parent = totemScroll
+                return
+            end
+            
+            for i, totem in ipairs(DETECTED_TOTEMS) do
+                local totemContainer = Instance.new("Frame")
+                totemContainer.Size = UDim2.new(1, -10, 0, 60)
+                totemContainer.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+                totemContainer.BorderSizePixel = 1
+                totemContainer.BorderColor3 = Color3.fromRGB(100, 100, 100)
+                totemContainer.Parent = totemScroll
+                
+                local totemInfo = Instance.new("TextLabel")
+                totemInfo.Size = UDim2.new(1, -10, 0, 35)
+                totemInfo.Position = UDim2.new(0, 5, 0, 5)
+                totemInfo.BackgroundTransparency = 1
+                totemInfo.Text = string.format("🗿 %s\n📏 Distance: %.1f studs", totem.name, totem.distance)
+                totemInfo.TextColor3 = Color3.fromRGB(255, 255, 255)
+                totemInfo.TextSize = 11
+                totemInfo.Font = Enum.Font.Gotham
+                totemInfo.TextXAlignment = Enum.TextXAlignment.Left
+                totemInfo.Parent = totemContainer
+                
+                local tpBtn = Instance.new("TextButton")
+                tpBtn.Size = UDim2.new(1, -10, 0, 20)
+                tpBtn.Position = UDim2.new(0, 5, 1, -25)
+                tpBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+                tpBtn.Text = "⚡ TELEPORT"
+                tpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                tpBtn.TextSize = 11
+                tpBtn.Font = Enum.Font.GothamBold
+                tpBtn.Parent = totemContainer
+                
+                tpBtn.MouseButton1Click:Connect(function()
+                    if totem.object and totem.position then
+                        pcall(function()
+                            LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(totem.position)
+                            log("✅ Teleported to totem: " .. totem.name, "success")
+                            createNotification("✅ Teleported", "Moved to " .. totem.name, 3)
+                        end)
+                    end
+                end)
+            end
+            
+            totemScroll.CanvasSize = UDim2.new(0, 0, 0, totemListLayout.AbsoluteContentSize.Y + 10)
+        end
+        
+        -- ==================== PLAYER FRAME ====================
         local playerFrame = Instance.new("Frame")
         playerFrame.Name = "PlayerFrame"
         playerFrame.Size = UDim2.new(0, 350, 0, 400)
@@ -129,453 +307,317 @@ local function createLogViewer()
         playerFrame.Visible = false
         playerFrame.Parent = screenGui
         
-        -- Title Player Frame
         local playerTitle = Instance.new("TextLabel")
-        playerTitle.Name = "PlayerTitle"
         playerTitle.Size = UDim2.new(1, 0, 0, 30)
         playerTitle.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-        playerTitle.BorderSizePixel = 0
-        playerTitle.Text = "👥 PLAYER LIST - Teleport"
+        playerTitle.Text = "👥 PLAYER LIST"
         playerTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
         playerTitle.TextSize = 14
         playerTitle.Font = Enum.Font.GothamBold
         playerTitle.Parent = playerFrame
         
-        -- ScrollingFrame untuk player list
-        local playerScrollFrame = Instance.new("ScrollingFrame")
-        playerScrollFrame.Name = "PlayerScroll"
-        playerScrollFrame.Size = UDim2.new(1, -10, 1, -80)
-        playerScrollFrame.Position = UDim2.new(0, 5, 0, 35)
-        playerScrollFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-        playerScrollFrame.BorderSizePixel = 1
-        playerScrollFrame.BorderColor3 = Color3.fromRGB(100, 100, 100)
-        playerScrollFrame.ScrollBarThickness = 8
-        playerScrollFrame.Parent = playerFrame
+        local playerScroll = Instance.new("ScrollingFrame")
+        playerScroll.Size = UDim2.new(1, -10, 1, -80)
+        playerScroll.Position = UDim2.new(0, 5, 0, 35)
+        playerScroll.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+        playerScroll.ScrollBarThickness = 8
+        playerScroll.Parent = playerFrame
         
-        -- UIListLayout untuk player buttons
         local playerListLayout = Instance.new("UIListLayout")
         playerListLayout.SortOrder = Enum.SortOrder.LayoutOrder
         playerListLayout.Padding = UDim.new(0, 5)
-        playerListLayout.Parent = playerScrollFrame
+        playerListLayout.Parent = playerScroll
         
-        -- Function untuk refresh player list
         local function refreshPlayerList()
-            -- Clear existing buttons
-            for _, child in pairs(playerScrollFrame:GetChildren()) do
+            for _, child in pairs(playerScroll:GetChildren()) do
                 if child:IsA("TextButton") then
                     child:Destroy()
                 end
             end
             
-            log("🔄 Refreshing player list...", "info")
-            local playerCount = 0
-            
-            -- Create button untuk setiap player
             for _, player in pairs(Players:GetPlayers()) do
                 if player ~= LocalPlayer then
-                    playerCount = playerCount + 1
-                    
                     local playerBtn = Instance.new("TextButton")
-                    playerBtn.Name = player.Name
                     playerBtn.Size = UDim2.new(1, -10, 0, 40)
                     playerBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-                    playerBtn.BorderSizePixel = 1
-                    playerBtn.BorderColor3 = Color3.fromRGB(100, 100, 100)
-                    playerBtn.Text = "📍 " .. player.Name .. " (" .. player.DisplayName .. ")"
+                    playerBtn.Text = "📍 " .. player.Name
                     playerBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
                     playerBtn.TextSize = 12
                     playerBtn.Font = Enum.Font.Gotham
                     playerBtn.TextXAlignment = Enum.TextXAlignment.Left
-                    playerBtn.TextTruncate = Enum.TextTruncate.AtEnd
-                    playerBtn.Parent = playerScrollFrame
+                    playerBtn.Parent = playerScroll
                     
-                    -- Teleport functionality
                     playerBtn.MouseButton1Click:Connect(function()
-                        local targetPlayer = player
-                        if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                            local success, err = pcall(function()
-                                LocalPlayer.Character.HumanoidRootPart.CFrame = targetPlayer.Character.HumanoidRootPart.CFrame
+                        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                            pcall(function()
+                                LocalPlayer.Character.HumanoidRootPart.CFrame = player.Character.HumanoidRootPart.CFrame
+                                log("✅ Teleported to " .. player.Name, "success")
+                                createNotification("✅ Teleported", "Moved to " .. player.Name, 3)
                             end)
-                            
-                            if success then
-                                log("✅ Teleported to " .. targetPlayer.Name, "success")
-                                createNotification("✅ Teleported", "Teleported to " .. targetPlayer.Name, 3)
-                            else
-                                log("❌ Teleport failed: " .. tostring(err), "error")
-                                createNotification("❌ Failed", "Teleport failed!", 3)
-                            end
-                        else
-                            log("⚠️ Player character not found: " .. targetPlayer.Name, "warning")
-                            createNotification("⚠️ Warning", "Player character not found!", 3)
                         end
                     end)
                 end
             end
             
-            log("✅ Player list refreshed! Found " .. playerCount .. " players", "success")
-            playerScrollFrame.CanvasSize = UDim2.new(0, 0, 0, playerListLayout.AbsoluteContentSize.Y + 10)
+            playerScroll.CanvasSize = UDim2.new(0, 0, 0, playerListLayout.AbsoluteContentSize.Y + 10)
         end
         
-        -- Button: Refresh Player List
-        local refreshBtn = Instance.new("TextButton")
-        refreshBtn.Name = "RefreshButton"
-        refreshBtn.Size = UDim2.new(0.48, -2, 0, 35)
-        refreshBtn.Position = UDim2.new(0.01, 0, 1, -40)
-        refreshBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
-        refreshBtn.BorderSizePixel = 0
-        refreshBtn.Text = "🔄 REFRESH"
-        refreshBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        refreshBtn.TextSize = 13
-        refreshBtn.Font = Enum.Font.GothamBold
-        refreshBtn.Parent = playerFrame
+        -- ==================== BUTTONS ====================
+        local btnY = -40
         
-        refreshBtn.MouseButton1Click:Connect(function()
-            refreshPlayerList()
-        end)
-        
-        -- Button: Close Player List
-        local closePlayerBtn = Instance.new("TextButton")
-        closePlayerBtn.Name = "ClosePlayerButton"
-        closePlayerBtn.Size = UDim2.new(0.48, -2, 0, 35)
-        closePlayerBtn.Position = UDim2.new(0.51, 0, 1, -40)
-        closePlayerBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
-        closePlayerBtn.BorderSizePixel = 0
-        closePlayerBtn.Text = "❌ CLOSE"
-        closePlayerBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        closePlayerBtn.TextSize = 13
-        closePlayerBtn.Font = Enum.Font.GothamBold
-        closePlayerBtn.Parent = playerFrame
-        
-        closePlayerBtn.MouseButton1Click:Connect(function()
-            playerFrame.Visible = false
-        end)
-        
-        -- Initial refresh
-        refreshPlayerList()
-        
-        -- Auto refresh setiap 5 detik
-        spawn(function()
-            while true do
-                wait(5)
-                if playerFrame.Visible then
-                    refreshPlayerList()
-                end
-            end
-        end)
-        
-        -- Title Log Frame
-        local title = Instance.new("TextLabel")
-        title.Name = "Title"
-        title.Size = UDim2.new(1, 0, 0, 30)
-        title.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-        title.BorderSizePixel = 0
-        title.Text = "Fish It Utility - LOG VIEWER"
-        title.TextColor3 = Color3.fromRGB(255, 255, 255)
-        title.TextSize = 14
-        title.Font = Enum.Font.GothamBold
-        title.Parent = frame
-        
-        -- ScrollingFrame untuk log
-        local scrollFrame = Instance.new("ScrollingFrame")
-        scrollFrame.Name = "LogScroll"
-        scrollFrame.Size = UDim2.new(1, -10, 1, -80)
-        scrollFrame.Position = UDim2.new(0, 5, 0, 35)
-        scrollFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-        scrollFrame.BorderSizePixel = 1
-        scrollFrame.BorderColor3 = Color3.fromRGB(100, 100, 100)
-        scrollFrame.ScrollBarThickness = 8
-        scrollFrame.Parent = frame
-        
-        -- TextLabel untuk log text
-        local logText = Instance.new("TextLabel")
-        logText.Name = "LogText"
-        logText.Size = UDim2.new(1, -10, 1, 0)
-        logText.Position = UDim2.new(0, 5, 0, 0)
-        logText.BackgroundTransparency = 1
-        logText.Text = "Waiting for logs..."
-        logText.TextColor3 = Color3.fromRGB(255, 255, 255)
-        logText.TextSize = 12
-        logText.Font = Enum.Font.Code
-        logText.TextXAlignment = Enum.TextXAlignment.Left
-        logText.TextYAlignment = Enum.TextYAlignment.Top
-        logText.TextWrapped = true
-        logText.Parent = scrollFrame
-        
-        -- Button: Copy to Clipboard
+        -- Copy Button
         local copyBtn = Instance.new("TextButton")
-        copyBtn.Name = "CopyButton"
-        copyBtn.Size = UDim2.new(0.24, -2, 0, 35)
-        copyBtn.Position = UDim2.new(0.01, 0, 1, -40)
+        copyBtn.Size = UDim2.new(0.19, 0, 0, 35)
+        copyBtn.Position = UDim2.new(0.01, 0, 1, btnY)
         copyBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
-        copyBtn.BorderSizePixel = 0
         copyBtn.Text = "📋"
-        copyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
         copyBtn.TextSize = 16
         copyBtn.Font = Enum.Font.GothamBold
-        copyBtn.Parent = frame
+        copyBtn.Parent = logFrame
+        copyBtn.MouseButton1Click:Connect(saveLogToClipboard)
         
-        copyBtn.MouseButton1Click:Connect(function()
-            saveLogToClipboard()
-        end)
-        
-        -- Button: Stop/Start
+        -- Stop/Start Button
         local stopBtn = Instance.new("TextButton")
-        stopBtn.Name = "StopButton"
-        stopBtn.Size = UDim2.new(0.24, -2, 0, 35)
-        stopBtn.Position = UDim2.new(0.26, 0, 1, -40)
+        stopBtn.Size = UDim2.new(0.19, 0, 0, 35)
+        stopBtn.Position = UDim2.new(0.21, 0, 1, btnY)
         stopBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 0)
-        stopBtn.BorderSizePixel = 0
         stopBtn.Text = "⏸️"
-        stopBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
         stopBtn.TextSize = 16
         stopBtn.Font = Enum.Font.GothamBold
-        stopBtn.Parent = frame
+        stopBtn.Parent = logFrame
         
         stopBtn.MouseButton1Click:Connect(function()
             IS_RUNNING = not IS_RUNNING
-            
-            if IS_RUNNING then
-                stopBtn.Text = "⏸️"
-                stopBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 0)
-                log("▶️ AUTO HOP RESUMED!", "success")
-                createNotification("▶️ Started", "Auto hop resumed!", 3)
-            else
-                stopBtn.Text = "▶️"
-                stopBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
-                log("⏸️ AUTO HOP STOPPED!", "warning")
-                createNotification("⏸️ Stopped", "Auto hop paused", 3)
+            stopBtn.Text = IS_RUNNING and "⏸️" or "▶️"
+            stopBtn.BackgroundColor3 = IS_RUNNING and Color3.fromRGB(200, 100, 0) or Color3.fromRGB(0, 150, 0)
+            log(IS_RUNNING and "▶️ AUTO HOP RESUMED!" or "⏸️ AUTO HOP STOPPED!", IS_RUNNING and "success" or "warning")
+        end)
+        
+        -- Totem Button
+        local totemBtn = Instance.new("TextButton")
+        totemBtn.Size = UDim2.new(0.19, 0, 0, 35)
+        totemBtn.Position = UDim2.new(0.41, 0, 1, btnY)
+        totemBtn.BackgroundColor3 = Color3.fromRGB(100, 150, 255)
+        totemBtn.Text = "🗿"
+        totemBtn.TextSize = 16
+        totemBtn.Font = Enum.Font.GothamBold
+        totemBtn.Parent = logFrame
+        
+        totemBtn.MouseButton1Click:Connect(function()
+            totemFrame.Visible = not totemFrame.Visible
+            if totemFrame.Visible then
+                refreshTotemList()
             end
         end)
         
-        -- Button: Player List
-        local playerListBtn = Instance.new("TextButton")
-        playerListBtn.Name = "PlayerListButton"
-        playerListBtn.Size = UDim2.new(0.24, -2, 0, 35)
-        playerListBtn.Position = UDim2.new(0.51, 0, 1, -40)
-        playerListBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
-        playerListBtn.BorderSizePixel = 0
-        playerListBtn.Text = "👥"
-        playerListBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        playerListBtn.TextSize = 16
-        playerListBtn.Font = Enum.Font.GothamBold
-        playerListBtn.Parent = frame
+        -- Player Button
+        local playerBtn = Instance.new("TextButton")
+        playerBtn.Size = UDim2.new(0.19, 0, 0, 35)
+        playerBtn.Position = UDim2.new(0.61, 0, 1, btnY)
+        playerBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+        playerBtn.Text = "👥"
+        playerBtn.TextSize = 16
+        playerBtn.Font = Enum.Font.GothamBold
+        playerBtn.Parent = logFrame
         
-        playerListBtn.MouseButton1Click:Connect(function()
+        playerBtn.MouseButton1Click:Connect(function()
             playerFrame.Visible = not playerFrame.Visible
             if playerFrame.Visible then
                 refreshPlayerList()
             end
         end)
         
-        -- Button: Close
+        -- Close Button
         local closeBtn = Instance.new("TextButton")
-        closeBtn.Name = "CloseButton"
-        closeBtn.Size = UDim2.new(0.24, -2, 0, 35)
-        closeBtn.Position = UDim2.new(0.76, 0, 1, -40)
+        closeBtn.Size = UDim2.new(0.19, 0, 0, 35)
+        closeBtn.Position = UDim2.new(0.81, 0, 1, btnY)
         closeBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
-        closeBtn.BorderSizePixel = 0
         closeBtn.Text = "❌"
-        closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
         closeBtn.TextSize = 16
         closeBtn.Font = Enum.Font.GothamBold
-        closeBtn.Parent = frame
+        closeBtn.Parent = logFrame
+        closeBtn.MouseButton1Click:Connect(function() logFrame.Visible = false end)
         
-        closeBtn.MouseButton1Click:Connect(function()
-            frame.Visible = false
-        end)
+        -- Totem Frame Buttons
+        local refreshTotemBtn = Instance.new("TextButton")
+        refreshTotemBtn.Size = UDim2.new(0.48, -2, 0, 35)
+        refreshTotemBtn.Position = UDim2.new(0.01, 0, 1, -40)
+        refreshTotemBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+        refreshTotemBtn.Text = "🔄 SCAN"
+        refreshTotemBtn.TextSize = 13
+        refreshTotemBtn.Font = Enum.Font.GothamBold
+        refreshTotemBtn.Parent = totemFrame
+        refreshTotemBtn.MouseButton1Click:Connect(refreshTotemList)
         
-        -- Button: Toggle (Minimize/Maximize) di kanan atas
+        local closeTotemBtn = Instance.new("TextButton")
+        closeTotemBtn.Size = UDim2.new(0.48, -2, 0, 35)
+        closeTotemBtn.Position = UDim2.new(0.51, 0, 1, -40)
+        closeTotemBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
+        closeTotemBtn.Text = "❌ CLOSE"
+        closeTotemBtn.TextSize = 13
+        closeTotemBtn.Font = Enum.Font.GothamBold
+        closeTotemBtn.Parent = totemFrame
+        closeTotemBtn.MouseButton1Click:Connect(function() totemFrame.Visible = false end)
+        
+        -- Player Frame Buttons
+        local refreshPlayerBtn = Instance.new("TextButton")
+        refreshPlayerBtn.Size = UDim2.new(0.48, -2, 0, 35)
+        refreshPlayerBtn.Position = UDim2.new(0.01, 0, 1, -40)
+        refreshPlayerBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+        refreshPlayerBtn.Text = "🔄 REFRESH"
+        refreshPlayerBtn.TextSize = 13
+        refreshPlayerBtn.Font = Enum.Font.GothamBold
+        refreshPlayerBtn.Parent = playerFrame
+        refreshPlayerBtn.MouseButton1Click:Connect(refreshPlayerList)
+        
+        local closePlayerBtn = Instance.new("TextButton")
+        closePlayerBtn.Size = UDim2.new(0.48, -2, 0, 35)
+        closePlayerBtn.Position = UDim2.new(0.51, 0, 1, -40)
+        closePlayerBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
+        closePlayerBtn.Text = "❌ CLOSE"
+        closePlayerBtn.TextSize = 13
+        closePlayerBtn.Font = Enum.Font.GothamBold
+        closePlayerBtn.Parent = playerFrame
+        closePlayerBtn.MouseButton1Click:Connect(function() playerFrame.Visible = false end)
+        
+        -- Toggle Button
         local toggleBtn = Instance.new("TextButton")
-        toggleBtn.Name = "ToggleButton"
-        toggleBtn.Size = UDim2.new(0, 60, 0, 25)
-        toggleBtn.Position = UDim2.new(1, -150, 0, 0)
-        toggleBtn.AnchorPoint = Vector2.new(0, 0)
+        toggleBtn.Size = UDim2.new(0, 80, 0, 30)
+        toggleBtn.Position = UDim2.new(1, -85, 0, 5)
         toggleBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-        toggleBtn.BorderSizePixel = 0
-        toggleBtn.Text = "📊 LOG"
-        toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        toggleBtn.Text = "⚙ MENU"
         toggleBtn.TextSize = 12
         toggleBtn.Font = Enum.Font.GothamBold
         toggleBtn.Parent = screenGui
+        toggleBtn.MouseButton1Click:Connect(function() logFrame.Visible = not logFrame.Visible end)
         
-        toggleBtn.MouseButton1Click:Connect(function()
-            frame.Visible = not frame.Visible
-        end)
-        
-        -- Update log text setiap detik
+        -- Update log text
         spawn(function()
             while true do
                 wait(1)
-                local displayLog = table.concat(LOG_HISTORY, "\n")
-                logText.Text = displayLog
+                logText.Text = table.concat(LOG_HISTORY, "\n")
+                logScroll.CanvasSize = UDim2.new(0, 0, 0, logText.TextBounds.Y + 10)
+                logScroll.CanvasPosition = Vector2.new(0, logScroll.CanvasSize.Y.Offset)
                 
-                -- Auto scroll ke bawah
-                scrollFrame.CanvasSize = UDim2.new(0, 0, 0, logText.TextBounds.Y + 10)
-                scrollFrame.CanvasPosition = Vector2.new(0, scrollFrame.CanvasSize.Y.Offset)
+                -- Update server type display
+                logTitle.Text = "📊 LOG VIEWER - Server: " .. CURRENT_SERVER_TYPE
+            end
+        end)
+        
+        -- Auto scan totem
+        spawn(function()
+            while true do
+                wait(TOTEM_SCAN_INTERVAL)
+                if totemFrame.Visible then
+                    refreshTotemList()
+                end
             end
         end)
         
         screenGui.Parent = game:GetService("CoreGui")
-        log("✅ Log viewer GUI created successfully!", "success")
+        log("✅ Enhanced GUI created!", "success")
     end)
     
     if not success then
-        log("❌ Failed to create log viewer: " .. tostring(err), "error")
+        log("❌ Failed to create GUI: " .. tostring(err), "error")
     end
 end
 
--- Fungsi untuk rejoin dengan server hop method
+-- Fungsi rejoin dengan server type detection
 local function rejoinGame()
     log("========== REJOIN PROCESS STARTED ==========", "info")
-    log("Current PlaceId: " .. tostring(game.PlaceId), "info")
-    log("Current JobId: " .. tostring(game.JobId), "info")
-    log("Player Name: " .. tostring(LocalPlayer.Name), "info")
+    log("Current Server Type: " .. CURRENT_SERVER_TYPE, "info")
     
     local success, err = pcall(function()
-        log("Step 1: Preparing to fetch server list...", "info")
-        
         local serverList = {}
         local cursor = ""
-        local attempts = 0
-        local maxAttempts = 3
         
-        log("Step 2: Starting HTTP request to Roblox API...", "info")
+        -- Jika server Private, langsung rejoin tanpa server hopping
+        if CURRENT_SERVER_TYPE == "Private" then
+            log("🔒 Private Server detected - Direct rejoin", "info")
+            createNotification("🔄 Rejoining", "Reconnecting to private server...", 3)
+            wait(1)
+            TeleportService:Teleport(game.PlaceId, LocalPlayer)
+            return
+        end
+        
+        -- Public server - lakukan server hopping
+        log("🌐 Public Server - Finding another public server...", "info")
         
         repeat
-            attempts = attempts + 1
-            log("Attempt " .. attempts .. "/" .. maxAttempts, "info")
-            
             local url = string.format(
                 "https://games.roblox.com/v1/games/%s/servers/Public?sortOrder=Asc&limit=100&cursor=%s",
                 game.PlaceId,
                 cursor
             )
-            log("Request URL: " .. url, "info")
             
             local httpSuccess, servers = pcall(function()
                 return game:HttpGet(url)
             end)
             
-            if not httpSuccess then
-                log("❌ HTTP Request FAILED: " .. tostring(servers), "error")
-                break
-            end
-            
-            log("✅ HTTP Request SUCCESS! Response length: " .. #servers, "success")
-            
-            local decodeSuccess, decoded = pcall(function()
-                return HttpService:JSONDecode(servers)
-            end)
-            
-            if not decodeSuccess then
-                log("❌ JSON Decode FAILED: " .. tostring(decoded), "error")
-                break
-            end
-            
-            log("✅ JSON Decode SUCCESS!", "success")
-            
-            if decoded.data then
-                log("Processing " .. #decoded.data .. " servers...", "info")
+            if httpSuccess then
+                local decoded = HttpService:JSONDecode(servers)
                 
-                for i, server in pairs(decoded.data) do
-                    if server.playing < server.maxPlayers and server.id ~= game.JobId then
-                        table.insert(serverList, server.id)
-                        log("✅ Valid server #" .. i .. " added to list", "info")
+                if decoded.data then
+                    for _, server in pairs(decoded.data) do
+                        if server.playing < server.maxPlayers and server.id ~= game.JobId then
+                            table.insert(serverList, server.id)
+                        end
                     end
                 end
+                
+                cursor = decoded.nextPageCursor or ""
             else
-                log("⚠️ No server data in response!", "warning")
+                break
             end
-            
-            cursor = decoded.nextPageCursor or ""
-            
-        until cursor == "" or #serverList >= 10 or attempts >= maxAttempts
-        
-        log("Step 3: Total valid servers found: " .. #serverList, "info")
+        until cursor == "" or #serverList >= 10
         
         if #serverList > 0 then
             local randomServer = serverList[math.random(1, #serverList)]
-            log("Step 4: Selected server: " .. randomServer, "success")
-            log("Step 5: Calling TeleportToPlaceInstance...", "info")
-            
-            createNotification("🚀 Hopping", "Pindah server...", 3)
+            log("✅ Found public server: " .. randomServer, "success")
+            createNotification("🚀 Hopping", "Moving to another public server...", 3)
             wait(1)
-            
-            local teleportSuccess, teleportErr = pcall(function()
-                TeleportService:TeleportToPlaceInstance(game.PlaceId, randomServer, LocalPlayer)
-            end)
-            
-            if teleportSuccess then
-                log("✅ TeleportToPlaceInstance SUCCESS!", "success")
-            else
-                log("❌ TeleportToPlaceInstance FAILED: " .. tostring(teleportErr), "error")
-            end
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, randomServer, LocalPlayer)
         else
-            log("⚠️ No servers found, using fallback", "warning")
-            createNotification("🔄 Rejoining", "Reconnecting...", 3)
-            wait(1)
-            
-            local teleportSuccess, teleportErr = pcall(function()
-                TeleportService:Teleport(game.PlaceId, LocalPlayer)
-            end)
-            
-            if teleportSuccess then
-                log("✅ Teleport SUCCESS!", "success")
-            else
-                log("❌ Teleport FAILED: " .. tostring(teleportErr), "error")
-            end
+            log("⚠️ No servers found, fallback rejoin", "warning")
+            TeleportService:Teleport(game.PlaceId, LocalPlayer)
         end
     end)
     
     if not success then
         log("❌ CRITICAL ERROR: " .. tostring(err), "error")
         createNotification("❌ Error", "Rejoin failed!", 5)
-        
-        -- Send log ke webhook jika ada
-        sendLogToWebhook(table.concat(LOG_HISTORY, "\n"))
-        
-        log("Attempting emergency kick...", "warning")
         wait(2)
         pcall(function()
             LocalPlayer:Kick("Auto Rejoin - Reconnecting...")
         end)
     end
-    
-    log("========== REJOIN PROCESS ENDED ==========", "info")
 end
 
 -- Main loop
 local function startAutoRejoin()
     log("=================================================", "info")
-    log("✅ FISH IT UTILITY STARTED!", "success")
+    log("✅ FISH IT ENHANCED UTILITY STARTED!", "success")
     log("=================================================", "info")
+    
+    -- Detect server type
+    detectServerType()
+    
     log("Rejoin Interval: " .. REJOIN_INTERVAL .. " seconds", "info")
     log("PlaceId: " .. tostring(game.PlaceId), "info")
-    log("JobId: " .. tostring(game.JobId), "info")
     log("Player: " .. tostring(LocalPlayer.Name), "info")
     log("=================================================", "info")
     
-    -- Test HTTP
-    log("Testing HTTP capability...", "info")
-    local httpTest, httpResult = pcall(function()
-        return game:HttpGet("https://httpbin.org/get")
-    end)
-    log("HTTP Test: " .. tostring(httpTest), httpTest and "success" or "error")
-    if not httpTest then
-        log("❌ HTTP ERROR: " .. tostring(httpResult), "error")
-        log("⚠️ WARNING: Rejoin might not work!", "warning")
-    end
+    -- Initial totem scan
+    scanTotems()
     
-    log("Starting countdown loop...", "info")
-    
-    -- Countdown loop
     spawn(function()
         local countdown = REJOIN_INTERVAL
         
         while true do
             if IS_RUNNING then
                 if countdown > 0 then
-                    log("⏳ Next rejoin in " .. countdown .. " seconds", "info")
+                    log("⏳ Next rejoin in " .. countdown .. "s | Totems: " .. #DETECTED_TOTEMS, "info")
                     wait(1)
                     countdown = countdown - 1
                 else
@@ -584,31 +626,18 @@ local function startAutoRejoin()
                     countdown = REJOIN_INTERVAL
                 end
             else
-                log("⏸️ Auto hop is PAUSED (waiting for START)", "warning")
-                countdown = REJOIN_INTERVAL -- Reset countdown saat di-pause
-                wait(2) -- Check setiap 2 detik apakah sudah di-resume
+                log("⏸️ Auto hop PAUSED", "warning")
+                countdown = REJOIN_INTERVAL
+                wait(2)
             end
         end
     end)
-    
-    log("✅ Main loop started!", "success")
 end
 
--- Setup everything
-log("Initializing Fish It Utility...", "info")
-
--- Create log viewer GUI
-createLogViewer()
-
--- Notifications
-createNotification("⏳ Loading...", "Initializing...", 3)
-wait(3)
-createNotification("✅ SUCCESS!", "Utility loaded! Check LOG button", 5)
+-- Initialize
+log("Initializing Fish It Enhanced Utility...", "info")
+createGUI()
+createNotification("✅ LOADED!", "Enhanced utility ready!", 5)
 wait(2)
-createNotification("📊 LOG VIEWER", "Klik button 'LOG' di pojok kanan atas!", 8)
-
--- Start
 startAutoRejoin()
-
-log("🎮 Script fully running! Click LOG button to view", "success")
-log("📋 Use COPY LOG button to copy all logs", "info")
+log("🎮 Script fully running!", "success")
