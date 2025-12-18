@@ -1,22 +1,22 @@
--- Fish It Auto Rejoin Utility - MOBILE VERSION WITH TOTEM DETECTION
+-- Fish It Totem Detector & Teleporter - MOBILE VERSION
 -- Compatible with Delta Executor
 
-local TeleportService = game:GetService("TeleportService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
-local HttpService = game:GetService("HttpService")
 local Workspace = game:GetService("Workspace")
 
 -- Konfigurasi
-local REJOIN_INTERVAL = 15
-local IS_RUNNING = true
+local AUTO_REJOIN = false -- Set false sesuai permintaan
+local TOTEM_SCAN_INTERVAL = 2 -- Scan totem setiap 2 detik
 
--- Totem detection
+-- Totem tracking
 local ACTIVE_TOTEMS = {}
+
+-- Totem types to detect
 local TOTEM_TYPES = {
-    ["Luck Totem"] = {icon = "🍀", color = Color3.fromRGB(0, 255, 0)},
-    ["Mutation Totem"] = {icon = "🧬", color = Color3.fromRGB(255, 0, 255)},
-    ["Shiny Totem"] = {icon = "✨", color = Color3.fromRGB(255, 215, 0)}
+    "LuckTotem",
+    "MutationTotem",
+    "ShinyTotem"
 }
 
 -- UI Notification function
@@ -31,218 +31,378 @@ local function createNotification(title, text, duration)
     end)
 end
 
--- Function untuk detect totems
-local function detectTotems()
+-- Function untuk scan totems
+local function scanTotems()
     ACTIVE_TOTEMS = {}
     
-    for totemName, _ in pairs(TOTEM_TYPES) do
-        for _, obj in pairs(Workspace:GetDescendants()) do
-            if obj.Name == totemName or (obj:IsA("Model") and obj.Name:find(totemName)) then
-                local position = nil
-                
-                if obj:IsA("Model") and obj.PrimaryPart then
-                    position = obj.PrimaryPart.Position
-                elseif obj:IsA("BasePart") then
-                    position = obj.Position
-                end
-                
-                if position then
-                    table.insert(ACTIVE_TOTEMS, {
-                        name = totemName,
-                        object = obj,
-                        position = position
-                    })
+    pcall(function()
+        local zones = Workspace:FindFirstChild("zones")
+        if not zones then return end
+        
+        local fishing = zones:FindFirstChild("fishing")
+        if not fishing then return end
+        
+        for _, zone in pairs(fishing:GetChildren()) do
+            local active = zone:FindFirstChild("active")
+            if active then
+                for _, totem in pairs(active:GetChildren()) do
+                    for _, totemType in pairs(TOTEM_TYPES) do
+                        if totem.Name == totemType then
+                            local pos = totem:FindFirstChild("HumanoidRootPart") or totem.PrimaryPart or totem:FindFirstChildWhichIsA("BasePart")
+                            if pos then
+                                local timeLeft = totem:FindFirstChild("time_left")
+                                local duration = timeLeft and totem.time_left.Value or "Unknown"
+                                
+                                table.insert(ACTIVE_TOTEMS, {
+                                    name = totemType,
+                                    position = pos.Position,
+                                    cframe = pos.CFrame,
+                                    duration = duration,
+                                    object = totem,
+                                    zone = zone.Name
+                                })
+                            end
+                        end
+                    end
                 end
             end
         end
+    end)
+    
+    return #ACTIVE_TOTEMS
+end
+
+-- Function untuk teleport ke totem terdekat
+local function teleportToNearestTotem()
+    if #ACTIVE_TOTEMS == 0 then
+        createNotification("⚠️ No Totems", "Tidak ada totem aktif!", 3)
+        return false
     end
     
-    return ACTIVE_TOTEMS
-end
-
--- Function untuk get totem duration
-local function getTotemDuration(totem)
-    if totem.object:FindFirstChild("Duration") then
-        return totem.object.Duration.Value
-    end
-    return "Unknown"
-end
-
--- Function untuk teleport ke totem
-local function teleportToTotem(totem)
-    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        local success, err = pcall(function()
-            LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(totem.position)
-        end)
-        
-        if success then
-            createNotification("✅ Teleported", "Teleported to " .. totem.name, 3)
-            return true
-        else
-            createNotification("❌ Failed", "Teleport failed!", 3)
-            return false
-        end
-    end
-    return false
-end
-
--- Function untuk cari totem terdekat
-local function findNearestTotem()
-    if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        return nil
+    local char = LocalPlayer.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then
+        createNotification("❌ Error", "Character not found!", 3)
+        return false
     end
     
-    local playerPos = LocalPlayer.Character.HumanoidRootPart.Position
+    local playerPos = char.HumanoidRootPart.Position
     local nearest = nil
-    local minDistance = math.huge
+    local minDist = math.huge
     
     for _, totem in pairs(ACTIVE_TOTEMS) do
-        local distance = (playerPos - totem.position).Magnitude
-        if distance < minDistance then
-            minDistance = distance
+        local dist = (totem.position - playerPos).Magnitude
+        if dist < minDist then
+            minDist = dist
             nearest = totem
         end
     end
     
-    return nearest, minDistance
+    if nearest then
+        local success, err = pcall(function()
+            char.HumanoidRootPart.CFrame = nearest.cframe + Vector3.new(0, 3, 0)
+        end)
+        
+        if success then
+            createNotification("✅ Teleported", "Teleport ke " .. nearest.name .. " (" .. math.floor(minDist) .. " studs)", 3)
+            return true
+        else
+            createNotification("❌ Failed", "Teleport gagal!", 3)
+            return false
+        end
+    end
+    
+    return false
 end
 
--- CREATE TOTEM GUI
-local function createTotemGUI()
+-- Function untuk teleport ke totem spesifik
+local function teleportToTotem(index)
+    if not ACTIVE_TOTEMS[index] then
+        createNotification("❌ Error", "Totem tidak ditemukan!", 3)
+        return false
+    end
+    
+    local char = LocalPlayer.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then
+        createNotification("❌ Error", "Character not found!", 3)
+        return false
+    end
+    
+    local totem = ACTIVE_TOTEMS[index]
     local success, err = pcall(function()
+        char.HumanoidRootPart.CFrame = totem.cframe + Vector3.new(0, 3, 0)
+    end)
+    
+    if success then
+        createNotification("✅ Teleported", "Teleport ke " .. totem.name, 3)
+        return true
+    else
+        createNotification("❌ Failed", "Teleport gagal!", 3)
+        return false
+    end
+end
+
+-- Function untuk format waktu
+local function formatTime(seconds)
+    if type(seconds) ~= "number" then return "Unknown" end
+    local mins = math.floor(seconds / 60)
+    local secs = math.floor(seconds % 60)
+    return string.format("%02d:%02d", mins, secs)
+end
+
+-- CREATE TOTEM DETECTOR GUI
+local function createTotemGUI()
+    pcall(function()
+        -- Create ScreenGui
         local screenGui = Instance.new("ScreenGui")
-        screenGui.Name = "FishItTotemGUI"
+        screenGui.Name = "FishItTotemDetector"
         screenGui.ResetOnSpawn = false
         screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
         
-        -- Totem List Frame
-        local totemFrame = Instance.new("Frame")
-        totemFrame.Name = "TotemFrame"
-        totemFrame.Size = UDim2.new(0, 400, 0, 450)
-        totemFrame.Position = UDim2.new(0.5, -200, 0.5, -225)
-        totemFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-        totemFrame.BorderSizePixel = 2
-        totemFrame.BorderColor3 = Color3.fromRGB(255, 255, 255)
-        totemFrame.Active = true
-        totemFrame.Draggable = true
-        totemFrame.Visible = false
-        totemFrame.Parent = screenGui
+        -- Main Frame (Totem List)
+        local frame = Instance.new("Frame")
+        frame.Name = "TotemFrame"
+        frame.Size = UDim2.new(0, 400, 0, 450)
+        frame.Position = UDim2.new(0.5, -200, 0.5, -225)
+        frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+        frame.BorderSizePixel = 2
+        frame.BorderColor3 = Color3.fromRGB(255, 255, 255)
+        frame.Active = true
+        frame.Draggable = true
+        frame.Parent = screenGui
         
         -- Title
         local title = Instance.new("TextLabel")
-        title.Size = UDim2.new(1, 0, 0, 40)
+        title.Name = "Title"
+        title.Size = UDim2.new(1, 0, 0, 35)
         title.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
         title.BorderSizePixel = 0
-        title.Text = "🎯 ACTIVE TOTEMS - Teleport"
+        title.Text = "🔮 TOTEM DETECTOR"
         title.TextColor3 = Color3.fromRGB(255, 255, 255)
         title.TextSize = 16
         title.Font = Enum.Font.GothamBold
-        title.Parent = totemFrame
+        title.Parent = frame
         
-        -- ScrollingFrame
+        -- Status Label
+        local statusLabel = Instance.new("TextLabel")
+        statusLabel.Name = "Status"
+        statusLabel.Size = UDim2.new(1, -10, 0, 25)
+        statusLabel.Position = UDim2.new(0, 5, 0, 40)
+        statusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        statusLabel.BorderSizePixel = 1
+        statusLabel.BorderColor3 = Color3.fromRGB(100, 100, 100)
+        statusLabel.Text = "🔍 Scanning..."
+        statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        statusLabel.TextSize = 13
+        statusLabel.Font = Enum.Font.Gotham
+        statusLabel.Parent = frame
+        
+        -- ScrollingFrame untuk totem list
         local scrollFrame = Instance.new("ScrollingFrame")
         scrollFrame.Name = "TotemScroll"
-        scrollFrame.Size = UDim2.new(1, -10, 1, -130)
-        scrollFrame.Position = UDim2.new(0, 5, 0, 45)
+        scrollFrame.Size = UDim2.new(1, -10, 1, -155)
+        scrollFrame.Position = UDim2.new(0, 5, 0, 70)
         scrollFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
         scrollFrame.BorderSizePixel = 1
         scrollFrame.BorderColor3 = Color3.fromRGB(100, 100, 100)
         scrollFrame.ScrollBarThickness = 8
-        scrollFrame.Parent = totemFrame
+        scrollFrame.Parent = frame
         
+        -- UIListLayout
         local listLayout = Instance.new("UIListLayout")
         listLayout.SortOrder = Enum.SortOrder.LayoutOrder
         listLayout.Padding = UDim.new(0, 5)
         listLayout.Parent = scrollFrame
         
-        -- Function refresh totem list
-        local function refreshTotemList()
+        -- Button: Quick Teleport (Nearest)
+        local quickTpBtn = Instance.new("TextButton")
+        quickTpBtn.Name = "QuickTP"
+        quickTpBtn.Size = UDim2.new(0.48, -2, 0, 35)
+        quickTpBtn.Position = UDim2.new(0.01, 0, 1, -75)
+        quickTpBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+        quickTpBtn.BorderSizePixel = 0
+        quickTpBtn.Text = "⚡ TP TERDEKAT"
+        quickTpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        quickTpBtn.TextSize = 13
+        quickTpBtn.Font = Enum.Font.GothamBold
+        quickTpBtn.Parent = frame
+        
+        quickTpBtn.MouseButton1Click:Connect(function()
+            teleportToNearestTotem()
+        end)
+        
+        -- Button: Refresh
+        local refreshBtn = Instance.new("TextButton")
+        refreshBtn.Name = "Refresh"
+        refreshBtn.Size = UDim2.new(0.48, -2, 0, 35)
+        refreshBtn.Position = UDim2.new(0.51, 0, 1, -75)
+        refreshBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+        refreshBtn.BorderSizePixel = 0
+        refreshBtn.Text = "🔄 REFRESH"
+        refreshBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        refreshBtn.TextSize = 13
+        refreshBtn.Font = Enum.Font.GothamBold
+        refreshBtn.Parent = frame
+        
+        -- Button: Close
+        local closeBtn = Instance.new("TextButton")
+        closeBtn.Name = "Close"
+        closeBtn.Size = UDim2.new(1, -10, 0, 35)
+        closeBtn.Position = UDim2.new(0, 5, 1, -35)
+        closeBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
+        closeBtn.BorderSizePixel = 0
+        closeBtn.Text = "❌ CLOSE"
+        closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        closeBtn.TextSize = 13
+        closeBtn.Font = Enum.Font.GothamBold
+        closeBtn.Parent = frame
+        
+        closeBtn.MouseButton1Click:Connect(function()
+            frame.Visible = false
+        end)
+        
+        -- Toggle Button (kanan atas)
+        local toggleBtn = Instance.new("TextButton")
+        toggleBtn.Name = "Toggle"
+        toggleBtn.Size = UDim2.new(0, 80, 0, 30)
+        toggleBtn.Position = UDim2.new(1, -90, 0, 10)
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+        toggleBtn.BorderSizePixel = 0
+        toggleBtn.Text = "🔮 TOTEM"
+        toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        toggleBtn.TextSize = 12
+        toggleBtn.Font = Enum.Font.GothamBold
+        toggleBtn.Parent = screenGui
+        
+        toggleBtn.MouseButton1Click:Connect(function()
+            frame.Visible = not frame.Visible
+        end)
+        
+        -- Function untuk update totem list
+        local function updateTotemList()
+            -- Clear existing buttons
             for _, child in pairs(scrollFrame:GetChildren()) do
                 if child:IsA("Frame") then
                     child:Destroy()
                 end
             end
             
-            detectTotems()
+            local count = scanTotems()
+            statusLabel.Text = "🔮 Active Totems: " .. count
             
-            if #ACTIVE_TOTEMS == 0 then
+            if count == 0 then
                 local noTotem = Instance.new("TextLabel")
-                noTotem.Size = UDim2.new(1, -10, 0, 50)
+                noTotem.Size = UDim2.new(1, -10, 0, 40)
                 noTotem.BackgroundTransparency = 1
-                noTotem.Text = "❌ No active totems found"
-                noTotem.TextColor3 = Color3.fromRGB(255, 100, 100)
+                noTotem.Text = "⚠️ Tidak ada totem aktif"
+                noTotem.TextColor3 = Color3.fromRGB(200, 200, 200)
                 noTotem.TextSize = 14
                 noTotem.Font = Enum.Font.Gotham
                 noTotem.Parent = scrollFrame
-                return
-            end
-            
-            for i, totem in pairs(ACTIVE_TOTEMS) do
-                local totemInfo = TOTEM_TYPES[totem.name] or {icon = "📍", color = Color3.fromRGB(255, 255, 255)}
-                
-                local container = Instance.new("Frame")
-                container.Name = "Totem_" .. i
-                container.Size = UDim2.new(1, -10, 0, 80)
-                container.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-                container.BorderSizePixel = 1
-                container.BorderColor3 = totemInfo.color
-                container.Parent = scrollFrame
-                
-                local nameLabel = Instance.new("TextLabel")
-                nameLabel.Size = UDim2.new(1, -10, 0, 25)
-                nameLabel.Position = UDim2.new(0, 5, 0, 5)
-                nameLabel.BackgroundTransparency = 1
-                nameLabel.Text = totemInfo.icon .. " " .. totem.name
-                nameLabel.TextColor3 = totemInfo.color
-                nameLabel.TextSize = 14
-                nameLabel.Font = Enum.Font.GothamBold
-                nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-                nameLabel.Parent = container
-                
-                -- Duration label (updates real-time)
-                local durationLabel = Instance.new("TextLabel")
-                durationLabel.Name = "DurationLabel"
-                durationLabel.Size = UDim2.new(1, -10, 0, 20)
-                durationLabel.Position = UDim2.new(0, 5, 0, 28)
-                durationLabel.BackgroundTransparency = 1
-                durationLabel.Text = "⏱️ Duration: Checking..."
-                durationLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-                durationLabel.TextSize = 11
-                durationLabel.Font = Enum.Font.Gotham
-                durationLabel.TextXAlignment = Enum.TextXAlignment.Left
-                durationLabel.Parent = container
-                
-                local teleportBtn = Instance.new("TextButton")
-                teleportBtn.Size = UDim2.new(1, -10, 0, 25)
-                teleportBtn.Position = UDim2.new(0, 5, 1, -30)
-                teleportBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
-                teleportBtn.BorderSizePixel = 0
-                teleportBtn.Text = "📍 TELEPORT HERE"
-                teleportBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-                teleportBtn.TextSize = 12
-                teleportBtn.Font = Enum.Font.GothamBold
-                teleportBtn.Parent = container
-                
-                teleportBtn.MouseButton1Click:Connect(function()
-                    teleportToTotem(totem)
-                end)
+            else
+                for i, totem in pairs(ACTIVE_TOTEMS) do
+                    local totemFrame = Instance.new("Frame")
+                    totemFrame.Name = "Totem" .. i
+                    totemFrame.Size = UDim2.new(1, -10, 0, 80)
+                    totemFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+                    totemFrame.BorderSizePixel = 1
+                    totemFrame.BorderColor3 = Color3.fromRGB(100, 100, 100)
+                    totemFrame.Parent = scrollFrame
+                    
+                    -- Totem Icon/Type
+                    local icon = Instance.new("TextLabel")
+                    icon.Size = UDim2.new(0, 60, 1, 0)
+                    icon.BackgroundTransparency = 1
+                    icon.Text = "🔮"
+                    icon.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    icon.TextSize = 32
+                    icon.Parent = totemFrame
+                    
+                    -- Totem Info
+                    local info = Instance.new("TextLabel")
+                    info.Size = UDim2.new(1, -130, 0, 25)
+                    info.Position = UDim2.new(0, 65, 0, 5)
+                    info.BackgroundTransparency = 1
+                    info.Text = totem.name
+                    info.TextColor3 = Color3.fromRGB(255, 255, 100)
+                    info.TextSize = 14
+                    info.Font = Enum.Font.GothamBold
+                    info.TextXAlignment = Enum.TextXAlignment.Left
+                    info.Parent = totemFrame
+                    
+                    -- Zone Info
+                    local zoneInfo = Instance.new("TextLabel")
+                    zoneInfo.Size = UDim2.new(1, -130, 0, 20)
+                    zoneInfo.Position = UDim2.new(0, 65, 0, 28)
+                    zoneInfo.BackgroundTransparency = 1
+                    zoneInfo.Text = "📍 " .. totem.zone
+                    zoneInfo.TextColor3 = Color3.fromRGB(180, 180, 180)
+                    zoneInfo.TextSize = 11
+                    zoneInfo.Font = Enum.Font.Gotham
+                    zoneInfo.TextXAlignment = Enum.TextXAlignment.Left
+                    zoneInfo.Parent = totemFrame
+                    
+                    -- Duration Label (Real-time update)
+                    local durationLabel = Instance.new("TextLabel")
+                    durationLabel.Name = "Duration"
+                    durationLabel.Size = UDim2.new(1, -130, 0, 20)
+                    durationLabel.Position = UDim2.new(0, 65, 0, 50)
+                    durationLabel.BackgroundTransparency = 1
+                    durationLabel.Text = "⏱️ " .. formatTime(totem.duration)
+                    durationLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+                    durationLabel.TextSize = 12
+                    durationLabel.Font = Enum.Font.GothamBold
+                    durationLabel.TextXAlignment = Enum.TextXAlignment.Left
+                    durationLabel.Parent = totemFrame
+                    
+                    -- TP Button
+                    local tpBtn = Instance.new("TextButton")
+                    tpBtn.Size = UDim2.new(0, 60, 0, 70)
+                    tpBtn.Position = UDim2.new(1, -65, 0, 5)
+                    tpBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+                    tpBtn.BorderSizePixel = 0
+                    tpBtn.Text = "📍\nTP"
+                    tpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    tpBtn.TextSize = 14
+                    tpBtn.Font = Enum.Font.GothamBold
+                    tpBtn.Parent = totemFrame
+                    
+                    tpBtn.MouseButton1Click:Connect(function()
+                        teleportToTotem(i)
+                    end)
+                end
             end
             
             scrollFrame.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 10)
         end
         
-        -- Update duration real-time
+        refreshBtn.MouseButton1Click:Connect(function()
+            updateTotemList()
+        end)
+        
+        -- Real-time duration update
         spawn(function()
             while true do
                 wait(1)
-                if totemFrame.Visible then
+                if frame.Visible then
                     for i, totem in pairs(ACTIVE_TOTEMS) do
-                        local container = scrollFrame:FindFirstChild("Totem_" .. i)
-                        if container then
-                            local durationLabel = container:FindFirstChild("DurationLabel")
-                            if durationLabel then
-                                local duration = getTotemDuration(totem)
-                                durationLabel.Text = "⏱️ Duration: " .. tostring(duration)
+                        local totemFrame = scrollFrame:FindFirstChild("Totem" .. i)
+                        if totemFrame then
+                            local durationLabel = totemFrame:FindFirstChild("Duration")
+                            if durationLabel and totem.object then
+                                local timeLeft = totem.object:FindFirstChild("time_left")
+                                if timeLeft then
+                                    local newTime = timeLeft.Value
+                                    durationLabel.Text = "⏱️ " .. formatTime(newTime)
+                                    
+                                    -- Color coding based on time
+                                    if newTime < 60 then
+                                        durationLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+                                    elseif newTime < 180 then
+                                        durationLabel.TextColor3 = Color3.fromRGB(255, 255, 100)
+                                    else
+                                        durationLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+                                    end
+                                end
                             end
                         end
                     end
@@ -250,191 +410,28 @@ local function createTotemGUI()
             end
         end)
         
-        -- Buttons
-        local refreshBtn = Instance.new("TextButton")
-        refreshBtn.Size = UDim2.new(0.32, -3, 0, 35)
-        refreshBtn.Position = UDim2.new(0.01, 0, 1, -80)
-        refreshBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
-        refreshBtn.BorderSizePixel = 0
-        refreshBtn.Text = "🔄 REFRESH"
-        refreshBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        refreshBtn.TextSize = 12
-        refreshBtn.Font = Enum.Font.GothamBold
-        refreshBtn.Parent = totemFrame
-        
-        refreshBtn.MouseButton1Click:Connect(function()
-            refreshTotemList()
-            createNotification("🔄 Refreshed", "Totem list updated", 2)
-        end)
-        
-        local nearestBtn = Instance.new("TextButton")
-        nearestBtn.Size = UDim2.new(0.32, -3, 0, 35)
-        nearestBtn.Position = UDim2.new(0.34, 0, 1, -80)
-        nearestBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
-        nearestBtn.BorderSizePixel = 0
-        nearestBtn.Text = "📍 NEAREST"
-        nearestBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        nearestBtn.TextSize = 12
-        nearestBtn.Font = Enum.Font.GothamBold
-        nearestBtn.Parent = totemFrame
-        
-        nearestBtn.MouseButton1Click:Connect(function()
-            detectTotems()
-            local nearest, distance = findNearestTotem()
-            if nearest then
-                teleportToTotem(nearest)
-                createNotification("✅ Nearest", string.format("%.1fm away", distance), 3)
-            else
-                createNotification("❌ No Totems", "No totems found", 3)
-            end
-        end)
-        
-        local closeBtn = Instance.new("TextButton")
-        closeBtn.Size = UDim2.new(0.32, -3, 0, 35)
-        closeBtn.Position = UDim2.new(0.67, 0, 1, -80)
-        closeBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
-        closeBtn.BorderSizePixel = 0
-        closeBtn.Text = "❌ CLOSE"
-        closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        closeBtn.TextSize = 12
-        closeBtn.Font = Enum.Font.GothamBold
-        closeBtn.Parent = totemFrame
-        
-        closeBtn.MouseButton1Click:Connect(function()
-            totemFrame.Visible = false
-        end)
-        
-        -- Stop/Start button
-        local stopBtn = Instance.new("TextButton")
-        stopBtn.Size = UDim2.new(0.48, -2, 0, 35)
-        stopBtn.Position = UDim2.new(0.01, 0, 1, -40)
-        stopBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 0)
-        stopBtn.BorderSizePixel = 0
-        stopBtn.Text = "⏸️ PAUSE REJOIN"
-        stopBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        stopBtn.TextSize = 11
-        stopBtn.Font = Enum.Font.GothamBold
-        stopBtn.Parent = totemFrame
-        
-        stopBtn.MouseButton1Click:Connect(function()
-            IS_RUNNING = not IS_RUNNING
-            if IS_RUNNING then
-                stopBtn.Text = "⏸️ PAUSE REJOIN"
-                stopBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 0)
-                createNotification("▶️ Started", "Auto rejoin resumed", 3)
-            else
-                stopBtn.Text = "▶️ START REJOIN"
-                stopBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
-                createNotification("⏸️ Stopped", "Auto rejoin paused", 3)
-            end
-        end)
-        
-        -- Toggle button (top right)
-        local toggleBtn = Instance.new("TextButton")
-        toggleBtn.Size = UDim2.new(0, 80, 0, 30)
-        toggleBtn.Position = UDim2.new(1, -90, 0, 10)
-        toggleBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-        toggleBtn.BorderSizePixel = 0
-        toggleBtn.Text = "🎯 TOTEMS"
-        toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        toggleBtn.TextSize = 12
-        toggleBtn.Font = Enum.Font.GothamBold
-        toggleBtn.Parent = screenGui
-        
-        toggleBtn.MouseButton1Click:Connect(function()
-            totemFrame.Visible = not totemFrame.Visible
-            if totemFrame.Visible then
-                refreshTotemList()
-            end
-        end)
-        
-        -- Auto refresh every 5 seconds
+        -- Auto refresh every interval
         spawn(function()
             while true do
-                wait(5)
-                if totemFrame.Visible then
-                    refreshTotemList()
+                wait(TOTEM_SCAN_INTERVAL)
+                if frame.Visible then
+                    updateTotemList()
                 end
             end
         end)
         
+        -- Initial update
+        updateTotemList()
+        
         screenGui.Parent = game:GetService("CoreGui")
-        refreshTotemList()
-    end)
-end
-
--- Fungsi rejoin
-local function rejoinGame()
-    local success, err = pcall(function()
-        local serverList = {}
-        local cursor = ""
-        
-        repeat
-            local url = string.format(
-                "https://games.roblox.com/v1/games/%s/servers/Public?sortOrder=Asc&limit=100&cursor=%s",
-                game.PlaceId, cursor
-            )
-            
-            local httpSuccess, servers = pcall(function()
-                return game:HttpGet(url)
-            end)
-            
-            if httpSuccess then
-                local decoded = HttpService:JSONDecode(servers)
-                if decoded.data then
-                    for _, server in pairs(decoded.data) do
-                        if server.playing < server.maxPlayers and server.id ~= game.JobId then
-                            table.insert(serverList, server.id)
-                        end
-                    end
-                end
-                cursor = decoded.nextPageCursor or ""
-            else
-                break
-            end
-        until cursor == "" or #serverList >= 10
-        
-        if #serverList > 0 then
-            local randomServer = serverList[math.random(1, #serverList)]
-            createNotification("🚀 Hopping", "Changing server...", 3)
-            wait(1)
-            TeleportService:TeleportToPlaceInstance(game.PlaceId, randomServer, LocalPlayer)
-        else
-            createNotification("🔄 Rejoining", "Reconnecting...", 3)
-            wait(1)
-            TeleportService:Teleport(game.PlaceId, LocalPlayer)
-        end
-    end)
-    
-    if not success then
-        createNotification("❌ Error", "Rejoin failed!", 5)
-    end
-end
-
--- Main loop
-local function startAutoRejoin()
-    spawn(function()
-        local countdown = REJOIN_INTERVAL
-        while true do
-            if IS_RUNNING then
-                if countdown > 0 then
-                    wait(1)
-                    countdown = countdown - 1
-                else
-                    rejoinGame()
-                    countdown = REJOIN_INTERVAL
-                end
-            else
-                countdown = REJOIN_INTERVAL
-                wait(2)
-            end
-        end
     end)
 end
 
 -- Initialize
+createNotification("⏳ Loading...", "Initializing Totem Detector...", 3)
+wait(1)
 createTotemGUI()
-createNotification("✅ SUCCESS!", "Fish It Utility loaded!", 5)
+wait(1)
+createNotification("✅ SUCCESS!", "Totem Detector loaded!", 3)
 wait(2)
-createNotification("🎯 Totems", "Click TOTEMS button to detect & teleport!", 5)
-startAutoRejoin()
+createNotification("🔮 TOTEM", "Klik button 'TOTEM' di pojok kanan atas!", 5)
