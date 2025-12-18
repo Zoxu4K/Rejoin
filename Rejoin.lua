@@ -8,7 +8,7 @@ local LocalPlayer = Players.LocalPlayer
 local HttpService = game:GetService("HttpService")
 
 -- Konfigurasi
-local REJOIN_INTERVAL = 15 -- 15 detik
+local REJOIN_INTERVAL = 10 -- 15 detik
 local AUTO_EXECUTE = true
 local IS_RUNNING = true
 
