@@ -1,0 +1,109 @@
+-- Fish It Auto Rejoin Utility
+-- Compatible with Delta Executor
+
+local TeleportService = game:GetService("TeleportService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- Konfigurasi
+local REJOIN_INTERVAL = 3 -- Rejoin setiap 3 detik
+local AUTO_EXECUTE = true -- Auto execute script saat rejoin
+
+-- Fungsi untuk mendapatkan JobId server saat ini
+local function getCurrentServerId()
+    return game.JobId
+end
+
+-- Fungsi untuk rejoin ke server yang sama
+local function rejoinCurrentServer()
+    local success, err = pcall(function()
+        local jobId = getCurrentServerId()
+        
+        if jobId and jobId ~= "" then
+            print("[Fish It Utility] Rejoining server in 3 seconds...")
+            wait(3)
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, jobId, LocalPlayer)
+        else
+            print("[Fish It Utility] JobId not found, rejoining random server...")
+            wait(3)
+            TeleportService:Teleport(game.PlaceId, LocalPlayer)
+        end
+    end)
+    
+    if not success then
+        warn("[Fish It Utility] Rejoin failed:", err)
+    end
+end
+
+-- Fungsi untuk auto execute script (untuk Delta Executor)
+local function autoExecuteScript()
+    if AUTO_EXECUTE then
+        print("[Fish It Utility] Auto-execute enabled")
+        -- Script akan otomatis dijalankan oleh Delta Executor
+        -- Pastikan script ini disimpan di auto-execute folder Delta
+    end
+end
+
+-- Main loop untuk auto rejoin
+local function startAutoRejoin()
+    print("=================================")
+    print("[Fish It Utility] Started!")
+    print("[Fish It Utility] Auto Rejoin: ON")
+    print("[Fish It Utility] Interval: " .. REJOIN_INTERVAL .. " seconds")
+    print("=================================")
+    
+    -- Eksekusi script pertama kali
+    autoExecuteScript()
+    
+    -- Loop rejoin
+    while true do
+        wait(REJOIN_INTERVAL)
+        rejoinCurrentServer()
+    end
+end
+
+-- Handle disconnections
+Players.PlayerRemoving:Connect(function(player)
+    if player == LocalPlayer then
+        print("[Fish It Utility] Player removing, preparing rejoin...")
+    end
+end)
+
+-- Proteksi anti-kick
+local mt = getrawmetatable(game)
+local oldNamecall = mt.__namecall
+setreadonly(mt, false)
+
+mt.__namecall = newcclosure(function(self, ...)
+    local method = getnamecallmethod()
+    local args = {...}
+    
+    if method == "Kick" then
+        print("[Fish It Utility] Kick detected, rejoining...")
+        rejoinCurrentServer()
+        return
+    end
+    
+    return oldNamecall(self, ...)
+end)
+
+setreadonly(mt, true)
+
+-- UI Notification
+local function createNotification(title, text, duration)
+    game.StarterGui:SetCore("SendNotification", {
+        Title = title,
+        Text = text,
+        Duration = duration or 5
+    })
+end
+
+-- Tampilkan notifikasi startup
+createNotification(
+    "Fish It Utility",
+    "Auto Rejoin aktif! Rejoin setiap " .. REJOIN_INTERVAL .. " detik",
+    5
+)
+
+-- Jalankan utility
+startAutoRejoin()
