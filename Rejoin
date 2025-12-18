@@ -8,7 +8,7 @@ local LocalPlayer = Players.LocalPlayer
 local HttpService = game:GetService("HttpService")
 
 -- Konfigurasi
-local REJOIN_INTERVAL = 10 -- 3 menit (180 detik) - lebih aman
+local REJOIN_INTERVAL = 8 -- 8 detik
 local AUTO_EXECUTE = true
 
 -- Fungsi untuk rejoin dengan metode alternatif
@@ -66,17 +66,19 @@ end
 -- Main loop dengan interval lebih panjang
 local function startAutoRejoin()
     print("=================================")
-    print("[Fish It Utility] Started!")
+    print("[Fish It Utility] ✅ SUCCESSFULLY EXECUTED!")
     print("[Fish It Utility] Auto Server Hop: ON")
-    print("[Fish It Utility] Interval: " .. REJOIN_INTERVAL .. " seconds (" .. math.floor(REJOIN_INTERVAL/60) .. " minutes)")
+    print("[Fish It Utility] Interval: " .. REJOIN_INTERVAL .. " detik")
+    print("[Fish It Utility] Commands: /rejoin or /hop")
     print("=================================")
     
     autoExecuteScript()
     
-    -- Loop dengan interval 3 menit
+    -- Loop dengan interval 8 detik
     spawn(function()
         while true do
             wait(REJOIN_INTERVAL)
+            createNotification("🔄 Server Hopping", "Mencari server baru...", 3)
             rejoinGame()
         end
     end)
@@ -125,11 +127,29 @@ local function createNotification(title, text, duration)
     })
 end
 
--- Tampilkan notifikasi startup
+-- Notifikasi loading
 createNotification(
-    "Fish It Utility",
-    "Server hop aktif! Hop setiap " .. math.floor(REJOIN_INTERVAL/60) .. " menit untuk farming optimal",
-    7
+    "⏳ Loading...",
+    "Initializing Fish It Utility...",
+    3
+)
+
+wait(3)
+
+-- Notifikasi sukses execute
+createNotification(
+    "✅ SUCCESS!",
+    "Fish It Utility berhasil dijalankan!",
+    5
+)
+
+wait(2)
+
+-- Notifikasi info
+createNotification(
+    "🔄 Auto Server Hop",
+    "Server hop setiap " .. REJOIN_INTERVAL .. " detik | Ketik /rejoin untuk manual hop",
+    8
 )
 
 -- Command untuk manual rejoin (ketik di chat)
