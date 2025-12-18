@@ -8,8 +8,9 @@ local LocalPlayer = Players.LocalPlayer
 local HttpService = game:GetService("HttpService")
 
 -- Konfigurasi
-local REJOIN_INTERVAL = 10 -- 3 detik
+local REJOIN_INTERVAL = 10-- 3 detik
 local AUTO_EXECUTE = true
+local IS_RUNNING = true -- Status auto hop (true = jalan, false = stop)
 
 -- LOG STORAGE
 local LOG_HISTORY = {}
@@ -156,13 +157,13 @@ local function createLogViewer()
         -- Button: Copy to Clipboard
         local copyBtn = Instance.new("TextButton")
         copyBtn.Name = "CopyButton"
-        copyBtn.Size = UDim2.new(0.48, 0, 0, 35)
+        copyBtn.Size = UDim2.new(0.32, -2, 0, 35)
         copyBtn.Position = UDim2.new(0.01, 0, 1, -40)
         copyBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
         copyBtn.BorderSizePixel = 0
-        copyBtn.Text = "📋 COPY LOG"
+        copyBtn.Text = "📋 COPY"
         copyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        copyBtn.TextSize = 14
+        copyBtn.TextSize = 13
         copyBtn.Font = Enum.Font.GothamBold
         copyBtn.Parent = frame
         
@@ -170,16 +171,45 @@ local function createLogViewer()
             saveLogToClipboard()
         end)
         
+        -- Button: Stop/Start
+        local stopBtn = Instance.new("TextButton")
+        stopBtn.Name = "StopButton"
+        stopBtn.Size = UDim2.new(0.32, -2, 0, 35)
+        stopBtn.Position = UDim2.new(0.34, 0, 1, -40)
+        stopBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 0)
+        stopBtn.BorderSizePixel = 0
+        stopBtn.Text = "⏸️ STOP"
+        stopBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        stopBtn.TextSize = 13
+        stopBtn.Font = Enum.Font.GothamBold
+        stopBtn.Parent = frame
+        
+        stopBtn.MouseButton1Click:Connect(function()
+            IS_RUNNING = not IS_RUNNING
+            
+            if IS_RUNNING then
+                stopBtn.Text = "⏸️ STOP"
+                stopBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 0)
+                log("▶️ AUTO HOP RESUMED!", "success")
+                createNotification("▶️ Started", "Auto hop resumed!", 3)
+            else
+                stopBtn.Text = "▶️ START"
+                stopBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+                log("⏸️ AUTO HOP STOPPED!", "warning")
+                createNotification("⏸️ Stopped", "Auto hop paused", 3)
+            end
+        end)
+        
         -- Button: Close
         local closeBtn = Instance.new("TextButton")
         closeBtn.Name = "CloseButton"
-        closeBtn.Size = UDim2.new(0.48, 0, 0, 35)
-        closeBtn.Position = UDim2.new(0.51, 0, 1, -40)
+        closeBtn.Size = UDim2.new(0.32, -2, 0, 35)
+        closeBtn.Position = UDim2.new(0.67, 0, 1, -40)
         closeBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
         closeBtn.BorderSizePixel = 0
         closeBtn.Text = "❌ CLOSE"
         closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        closeBtn.TextSize = 14
+        closeBtn.TextSize = 13
         closeBtn.Font = Enum.Font.GothamBold
         closeBtn.Parent = frame
         
@@ -376,14 +406,20 @@ local function startAutoRejoin()
         local countdown = REJOIN_INTERVAL
         
         while true do
-            if countdown > 0 then
-                log("⏳ Next rejoin in " .. countdown .. " seconds", "info")
-                wait(1)
-                countdown = countdown - 1
+            if IS_RUNNING then
+                if countdown > 0 then
+                    log("⏳ Next rejoin in " .. countdown .. " seconds", "info")
+                    wait(1)
+                    countdown = countdown - 1
+                else
+                    log("🚀 COUNTDOWN COMPLETE! Starting rejoin...", "success")
+                    rejoinGame()
+                    countdown = REJOIN_INTERVAL
+                end
             else
-                log("🚀 COUNTDOWN COMPLETE! Starting rejoin...", "success")
-                rejoinGame()
-                countdown = REJOIN_INTERVAL
+                log("⏸️ Auto hop is PAUSED (waiting for START)", "warning")
+                countdown = REJOIN_INTERVAL -- Reset countdown saat di-pause
+                wait(2) -- Check setiap 2 detik apakah sudah di-resume
             end
         end
     end)
