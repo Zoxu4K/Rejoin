@@ -6,14 +6,11 @@ local TeleportService = game:GetService("TeleportService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local HttpService = game:GetService("HttpService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
 
 -- Konfigurasi
-local REJOIN_INTERVAL = 3 -- 3 detik
+local REJOIN_INTERVAL = 15 -- 15 detik
 local AUTO_EXECUTE = true
 local IS_RUNNING = true
-local AUTO_SHAKE = false -- Default OFF
-local SHAKE_SPEED = 0.1 -- Kecepatan shake (detik)
 
 -- LOG STORAGE
 local LOG_HISTORY = {}
@@ -41,7 +38,7 @@ end
 
 -- Fungsi untuk kirim log ke webhook Discord (OPTIONAL - ganti URL kalau mau pakai)
 local function sendLogToWebhook(logText)
-    local WEBHOOK_URL = "https://canary.discord.com/api/webhooks/1445613600835375208/GlDbi3Q3gXYaTOEJ8vxxSa-FWxBmtJlhvQ9VQPE5UgWh9UoQrrVuKtSHyZ_sj4-nHQhr" -- ISI DENGAN DISCORD WEBHOOK URL KALAU MAU
+    local WEBHOOK_URL = "" -- ISI DENGAN DISCORD WEBHOOK URL KALAU MAU
     
     if WEBHOOK_URL ~= "" then
         local success, err = pcall(function()
@@ -75,37 +72,6 @@ local function createNotification(title, text, duration)
             Duration = duration or 5,
             Icon = "rbxassetid://6031302931"
         })
-    end)
-end
-
--- AUTO SHAKE FUNCTION
-local function startAutoShake()
-    spawn(function()
-        while true do
-            if AUTO_SHAKE then
-                -- Cari PlayerGUI untuk detect fishing
-                local playerGui = LocalPlayer:WaitForChild("PlayerGui")
-                local shakeUI = playerGui:FindFirstChild("shakeui")
-                
-                if shakeUI and shakeUI.Enabled then
-                    -- Simulasi klik/tap di tengah layar
-                    local screenSize = workspace.CurrentCamera.ViewportSize
-                    local centerX = screenSize.X / 2
-                    local centerY = screenSize.Y / 2
-                    
-                    -- Virtual click
-                    pcall(function()
-                        VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, true, game, 0)
-                        wait(0.01)
-                        VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, false, game, 0)
-                    end)
-                    
-                    log("🎣 Auto shake clicked!", "info")
-                end
-            end
-            
-            wait(SHAKE_SPEED)
-        end
     end)
 end
 
@@ -359,7 +325,7 @@ local function createLogViewer()
         -- Button: Stop/Start
         local stopBtn = Instance.new("TextButton")
         stopBtn.Name = "StopButton"
-        stopBtn.Size = UDim2.new(0.24, -2, 0, 35)
+        stopBtn.Size = UDim2.new(0.32, -2, 0, 35)
         stopBtn.Position = UDim2.new(0.01, 0, 1, -40)
         stopBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 0)
         stopBtn.BorderSizePixel = 0
@@ -385,38 +351,11 @@ local function createLogViewer()
             end
         end)
         
-        -- Button: Auto Shake (BARU)
-        local shakeBtn = Instance.new("TextButton")
-        shakeBtn.Name = "ShakeButton"
-        shakeBtn.Size = UDim2.new(0.24, -2, 0, 35)
-        shakeBtn.Position = UDim2.new(0.26, 0, 1, -40)
-        shakeBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
-        shakeBtn.BorderSizePixel = 0
-        shakeBtn.Text = "🎣"
-        shakeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        shakeBtn.TextSize = 16
-        shakeBtn.Font = Enum.Font.GothamBold
-        shakeBtn.Parent = frame
-        
-        shakeBtn.MouseButton1Click:Connect(function()
-            AUTO_SHAKE = not AUTO_SHAKE
-            
-            if AUTO_SHAKE then
-                shakeBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
-                log("🎣 AUTO SHAKE ON!", "success")
-                createNotification("🎣 Auto Shake", "Auto shake enabled!", 3)
-            else
-                shakeBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
-                log("🎣 AUTO SHAKE OFF!", "warning")
-                createNotification("🎣 Auto Shake", "Auto shake disabled!", 3)
-            end
-        end)
-        
         -- Button: Player List
         local playerListBtn = Instance.new("TextButton")
         playerListBtn.Name = "PlayerListButton"
-        playerListBtn.Size = UDim2.new(0.24, -2, 0, 35)
-        playerListBtn.Position = UDim2.new(0.51, 0, 1, -40)
+        playerListBtn.Size = UDim2.new(0.32, -2, 0, 35)
+        playerListBtn.Position = UDim2.new(0.34, 0, 1, -40)
         playerListBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
         playerListBtn.BorderSizePixel = 0
         playerListBtn.Text = "👥"
@@ -430,6 +369,24 @@ local function createLogViewer()
             if playerFrame.Visible then
                 refreshPlayerList()
             end
+        end)
+        
+        -- Button: Close (minimize)
+        local closeBtn = Instance.new("TextButton")
+        closeBtn.Name = "CloseButton"
+        closeBtn.Size = UDim2.new(0.32, -2, 0, 35)
+        closeBtn.Position = UDim2.new(0.67, 0, 1, -40)
+        closeBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+        closeBtn.BorderSizePixel = 0
+        closeBtn.Text = "➖"
+        closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        closeBtn.TextSize = 20
+        closeBtn.Font = Enum.Font.GothamBold
+        closeBtn.Parent = frame
+        
+        closeBtn.MouseButton1Click:Connect(function()
+            frame.Visible = false
+            log("📦 Menu minimized", "info")
         end)
         
         -- Button Toggle yang bisa di-drag
@@ -577,7 +534,6 @@ local function startAutoRejoin()
     log("✅ FISH IT UTILITY STARTED!", "success")
     log("=================================================", "info")
     log("⚡ AUTO HOP: ON (Running)", "success")
-    log("🎣 AUTO SHAKE: OFF (Default)", "info")
     log("Rejoin Interval: " .. REJOIN_INTERVAL .. " seconds", "info")
     log("PlaceId: " .. tostring(game.PlaceId), "info")
     log("JobId: " .. tostring(game.JobId), "info")
@@ -629,9 +585,6 @@ log("Initializing Fish It Utility...", "info")
 -- Create log viewer GUI
 createLogViewer()
 
--- Start auto shake loop
-startAutoShake()
-
 -- Notifications
 createNotification("⏳ Loading...", "Initializing...", 3)
 wait(3)
@@ -644,5 +597,4 @@ startAutoRejoin()
 
 log("🎮 Script running! Auto hop is ACTIVE", "success")
 log("🎯 Will find servers with MOST players!", "info")
-log("🎣 Auto Shake: Press 🎣 button to toggle", "info")
 log("✋ You can DRAG the ⚙️ MENU button!", "info")
