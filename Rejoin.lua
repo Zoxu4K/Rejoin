@@ -1,3 +1,4 @@
+
 -- Fish It Auto Rejoin Utility - MOBILE VERSION WITH IN-GAME LOG VIEWER
 -- Compatible with Delta Executor
 -- Auto rejoin ke server publik dengan player banyak
@@ -10,7 +11,7 @@ local HttpService = game:GetService("HttpService")
 -- Konfigurasi
 local REJOIN_INTERVAL = 15 -- 15 detik
 local AUTO_EXECUTE = true
-local IS_RUNNING = false -- DIUBAH: Default OFF (false)
+local IS_RUNNING = true -- DIUBAH: Default ON (true)
 
 -- LOG STORAGE
 local LOG_HISTORY = {}
@@ -60,24 +61,6 @@ local function sendLogToWebhook(logText)
         else
             log("❌ Failed to send log to webhook: " .. tostring(err), "error")
         end
-    end
-end
-
--- Fungsi untuk save log ke clipboard (setclipboard)
-local function saveLogToClipboard()
-    local fullLog = table.concat(LOG_HISTORY, "\n")
-    
-    local success, err = pcall(function()
-        setclipboard(fullLog)
-    end)
-    
-    if success then
-        log("✅ LOG COPIED TO CLIPBOARD!", "success")
-        createNotification("✅ Success", "Log copied to clipboard! Paste di notes", 5)
-        return true
-    else
-        log("❌ Failed to copy to clipboard: " .. tostring(err), "error")
-        return false
     end
 end
 
@@ -301,31 +284,16 @@ local function createLogViewer()
         logText.TextWrapped = true
         logText.Parent = scrollFrame
         
-        -- Button: Copy to Clipboard
-        local copyBtn = Instance.new("TextButton")
-        copyBtn.Name = "CopyButton"
-        copyBtn.Size = UDim2.new(0.24, -2, 0, 35)
-        copyBtn.Position = UDim2.new(0.01, 0, 1, -40)
-        copyBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
-        copyBtn.BorderSizePixel = 0
-        copyBtn.Text = "📋"
-        copyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        copyBtn.TextSize = 16
-        copyBtn.Font = Enum.Font.GothamBold
-        copyBtn.Parent = frame
+        -- DIHAPUS: Button Copy to Clipboard
         
-        copyBtn.MouseButton1Click:Connect(function()
-            saveLogToClipboard()
-        end)
-        
-        -- Button: Stop/Start
+        -- Button: Stop/Start - DIUBAH posisi jadi di kiri
         local stopBtn = Instance.new("TextButton")
         stopBtn.Name = "StopButton"
-        stopBtn.Size = UDim2.new(0.24, -2, 0, 35)
-        stopBtn.Position = UDim2.new(0.26, 0, 1, -40)
-        stopBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0) -- DIUBAH: Hijau karena default OFF
+        stopBtn.Size = UDim2.new(0.32, -2, 0, 35)
+        stopBtn.Position = UDim2.new(0.01, 0, 1, -40)
+        stopBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 0)
         stopBtn.BorderSizePixel = 0
-        stopBtn.Text = "▶️" -- DIUBAH: Play icon karena default OFF
+        stopBtn.Text = "⏸️"
         stopBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
         stopBtn.TextSize = 16
         stopBtn.Font = Enum.Font.GothamBold
@@ -347,11 +315,11 @@ local function createLogViewer()
             end
         end)
         
-        -- Button: Player List
+        -- Button: Player List - DIUBAH posisi jadi di tengah
         local playerListBtn = Instance.new("TextButton")
         playerListBtn.Name = "PlayerListButton"
-        playerListBtn.Size = UDim2.new(0.24, -2, 0, 35)
-        playerListBtn.Position = UDim2.new(0.51, 0, 1, -40)
+        playerListBtn.Size = UDim2.new(0.32, -2, 0, 35)
+        playerListBtn.Position = UDim2.new(0.34, 0, 1, -40)
         playerListBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
         playerListBtn.BorderSizePixel = 0
         playerListBtn.Text = "👥"
@@ -367,11 +335,11 @@ local function createLogViewer()
             end
         end)
         
-        -- Button: Close
+        -- Button: Close - DIUBAH posisi jadi di kanan
         local closeBtn = Instance.new("TextButton")
         closeBtn.Name = "CloseButton"
-        closeBtn.Size = UDim2.new(0.24, -2, 0, 35)
-        closeBtn.Position = UDim2.new(0.76, 0, 1, -40)
+        closeBtn.Size = UDim2.new(0.32, -2, 0, 35)
+        closeBtn.Position = UDim2.new(0.67, 0, 1, -40)
         closeBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
         closeBtn.BorderSizePixel = 0
         closeBtn.Text = "❌"
@@ -424,7 +392,7 @@ local function createLogViewer()
     end
 end
 
--- DIUBAH: Fungsi rejoin BARU untuk cari server dengan PLAYER PALING BANYAK
+-- Fungsi rejoin untuk cari server dengan PLAYER PALING BANYAK
 local function rejoinGame()
     log("========== REJOIN PROCESS STARTED ==========", "info")
     log("Current PlaceId: " .. tostring(game.PlaceId), "info")
@@ -438,7 +406,7 @@ local function rejoinGame()
         local maxPlayers = 0
         local cursor = ""
         local attempts = 0
-        local maxAttempts = 5 -- Cek lebih banyak page untuk cari server terbaik
+        local maxAttempts = 5
         
         repeat
             attempts = attempts + 1
@@ -467,7 +435,6 @@ local function rejoinGame()
                 log("Processing " .. #decoded.data .. " servers...", "info")
                 
                 for i, server in pairs(decoded.data) do
-                    -- DIUBAH: Cari server dengan player PALING BANYAK (tapi tidak penuh)
                     if server.id ~= game.JobId and server.playing < server.maxPlayers then
                         if server.playing > maxPlayers then
                             maxPlayers = server.playing
@@ -521,7 +488,7 @@ local function startAutoRejoin()
     log("=================================================", "info")
     log("✅ FISH IT UTILITY STARTED!", "success")
     log("=================================================", "info")
-    log("⚠️ AUTO HOP: OFF (Press ▶️ button to START)", "warning") -- DIUBAH
+    log("⚡ AUTO HOP: ON (Running)", "success")
     log("Rejoin Interval: " .. REJOIN_INTERVAL .. " seconds", "info")
     log("PlaceId: " .. tostring(game.PlaceId), "info")
     log("JobId: " .. tostring(game.JobId), "info")
@@ -539,7 +506,7 @@ local function startAutoRejoin()
         log("⚠️ WARNING: Rejoin might not work!", "warning")
     end
     
-    log("Waiting for user to START auto hop...", "info")
+    log("Starting countdown loop...", "info")
     
     -- Countdown loop
     spawn(function()
@@ -576,13 +543,12 @@ createLogViewer()
 -- Notifications
 createNotification("⏳ Loading...", "Initializing...", 3)
 wait(3)
-createNotification("✅ SUCCESS!", "Utility loaded! Auto hop is OFF", 5)
+createNotification("✅ SUCCESS!", "Utility loaded! Auto hop is ON", 5)
 wait(2)
-createNotification("📊 INFO", "Press ▶️ button to START auto hop!", 8)
+createNotification("📊 INFO", "Click ⚙ MENU button to open panel!", 8)
 
 -- Start
 startAutoRejoin()
 
-log("🎮 Script ready! Press ▶️ button to start auto hop", "success")
+log("🎮 Script running! Auto hop is ACTIVE", "success")
 log("🎯 Will find servers with MOST players!", "info")
-log("📋 Use COPY LOG button to copy all logs", "info")
