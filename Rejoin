@@ -8,7 +8,7 @@ local LocalPlayer = Players.LocalPlayer
 local HttpService = game:GetService("HttpService")
 
 -- Konfigurasi
-local REJOIN_INTERVAL = 180 -- 3 menit (180 detik) - lebih aman
+local REJOIN_INTERVAL = 10 -- 3 menit (180 detik) - lebih aman
 local AUTO_EXECUTE = true
 
 -- Fungsi untuk rejoin dengan metode alternatif
