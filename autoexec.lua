@@ -9,7 +9,7 @@ wait(8) -- Tunggu game load sempurna
 local function loadMainScript()
     local success, err = pcall(function()
         print("[AUTO-EXEC] Loading Fish It Utility from GitHub...")
-        loadstring(game:HttpGet("https://raw.githubusercontent.com/Zoxu4K/Rejoin/refs/heads/main/Rejoin"))()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/Zoxu4K/Rejoin/refs/heads/main/Rejoin.lua"))()
         print("[AUTO-EXEC] ✅ Script loaded successfully!")
     end)
     
