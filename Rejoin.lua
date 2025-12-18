@@ -8,7 +8,7 @@ local LocalPlayer = Players.LocalPlayer
 local HttpService = game:GetService("HttpService")
 
 -- Konfigurasi
-local REJOIN_INTERVAL = 10-- 3 detik
+local REJOIN_INTERVAL = 3 -- 3 detik
 local AUTO_EXECUTE = true
 local IS_RUNNING = true -- Status auto hop (true = jalan, false = stop)
 
@@ -116,7 +116,154 @@ local function createLogViewer()
         frame.Draggable = true
         frame.Parent = screenGui
         
-        -- Title
+        -- Create Frame (Player List Window)
+        local playerFrame = Instance.new("Frame")
+        playerFrame.Name = "PlayerFrame"
+        playerFrame.Size = UDim2.new(0, 350, 0, 400)
+        playerFrame.Position = UDim2.new(0.5, -175, 0.5, -200)
+        playerFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+        playerFrame.BorderSizePixel = 2
+        playerFrame.BorderColor3 = Color3.fromRGB(255, 255, 255)
+        playerFrame.Active = true
+        playerFrame.Draggable = true
+        playerFrame.Visible = false
+        playerFrame.Parent = screenGui
+        
+        -- Title Player Frame
+        local playerTitle = Instance.new("TextLabel")
+        playerTitle.Name = "PlayerTitle"
+        playerTitle.Size = UDim2.new(1, 0, 0, 30)
+        playerTitle.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        playerTitle.BorderSizePixel = 0
+        playerTitle.Text = "👥 PLAYER LIST - Teleport"
+        playerTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+        playerTitle.TextSize = 14
+        playerTitle.Font = Enum.Font.GothamBold
+        playerTitle.Parent = playerFrame
+        
+        -- ScrollingFrame untuk player list
+        local playerScrollFrame = Instance.new("ScrollingFrame")
+        playerScrollFrame.Name = "PlayerScroll"
+        playerScrollFrame.Size = UDim2.new(1, -10, 1, -80)
+        playerScrollFrame.Position = UDim2.new(0, 5, 0, 35)
+        playerScrollFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+        playerScrollFrame.BorderSizePixel = 1
+        playerScrollFrame.BorderColor3 = Color3.fromRGB(100, 100, 100)
+        playerScrollFrame.ScrollBarThickness = 8
+        playerScrollFrame.Parent = playerFrame
+        
+        -- UIListLayout untuk player buttons
+        local playerListLayout = Instance.new("UIListLayout")
+        playerListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        playerListLayout.Padding = UDim.new(0, 5)
+        playerListLayout.Parent = playerScrollFrame
+        
+        -- Function untuk refresh player list
+        local function refreshPlayerList()
+            -- Clear existing buttons
+            for _, child in pairs(playerScrollFrame:GetChildren()) do
+                if child:IsA("TextButton") then
+                    child:Destroy()
+                end
+            end
+            
+            log("🔄 Refreshing player list...", "info")
+            local playerCount = 0
+            
+            -- Create button untuk setiap player
+            for _, player in pairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer then
+                    playerCount = playerCount + 1
+                    
+                    local playerBtn = Instance.new("TextButton")
+                    playerBtn.Name = player.Name
+                    playerBtn.Size = UDim2.new(1, -10, 0, 40)
+                    playerBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+                    playerBtn.BorderSizePixel = 1
+                    playerBtn.BorderColor3 = Color3.fromRGB(100, 100, 100)
+                    playerBtn.Text = "📍 " .. player.Name .. " (" .. player.DisplayName .. ")"
+                    playerBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    playerBtn.TextSize = 12
+                    playerBtn.Font = Enum.Font.Gotham
+                    playerBtn.TextXAlignment = Enum.TextXAlignment.Left
+                    playerBtn.TextTruncate = Enum.TextTruncate.AtEnd
+                    playerBtn.Parent = playerScrollFrame
+                    
+                    -- Teleport functionality
+                    playerBtn.MouseButton1Click:Connect(function()
+                        local targetPlayer = player
+                        if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                            local success, err = pcall(function()
+                                LocalPlayer.Character.HumanoidRootPart.CFrame = targetPlayer.Character.HumanoidRootPart.CFrame
+                            end)
+                            
+                            if success then
+                                log("✅ Teleported to " .. targetPlayer.Name, "success")
+                                createNotification("✅ Teleported", "Teleported to " .. targetPlayer.Name, 3)
+                            else
+                                log("❌ Teleport failed: " .. tostring(err), "error")
+                                createNotification("❌ Failed", "Teleport failed!", 3)
+                            end
+                        else
+                            log("⚠️ Player character not found: " .. targetPlayer.Name, "warning")
+                            createNotification("⚠️ Warning", "Player character not found!", 3)
+                        end
+                    end)
+                end
+            end
+            
+            log("✅ Player list refreshed! Found " .. playerCount .. " players", "success")
+            playerScrollFrame.CanvasSize = UDim2.new(0, 0, 0, playerListLayout.AbsoluteContentSize.Y + 10)
+        end
+        
+        -- Button: Refresh Player List
+        local refreshBtn = Instance.new("TextButton")
+        refreshBtn.Name = "RefreshButton"
+        refreshBtn.Size = UDim2.new(0.48, -2, 0, 35)
+        refreshBtn.Position = UDim2.new(0.01, 0, 1, -40)
+        refreshBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+        refreshBtn.BorderSizePixel = 0
+        refreshBtn.Text = "🔄 REFRESH"
+        refreshBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        refreshBtn.TextSize = 13
+        refreshBtn.Font = Enum.Font.GothamBold
+        refreshBtn.Parent = playerFrame
+        
+        refreshBtn.MouseButton1Click:Connect(function()
+            refreshPlayerList()
+        end)
+        
+        -- Button: Close Player List
+        local closePlayerBtn = Instance.new("TextButton")
+        closePlayerBtn.Name = "ClosePlayerButton"
+        closePlayerBtn.Size = UDim2.new(0.48, -2, 0, 35)
+        closePlayerBtn.Position = UDim2.new(0.51, 0, 1, -40)
+        closePlayerBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
+        closePlayerBtn.BorderSizePixel = 0
+        closePlayerBtn.Text = "❌ CLOSE"
+        closePlayerBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        closePlayerBtn.TextSize = 13
+        closePlayerBtn.Font = Enum.Font.GothamBold
+        closePlayerBtn.Parent = playerFrame
+        
+        closePlayerBtn.MouseButton1Click:Connect(function()
+            playerFrame.Visible = false
+        end)
+        
+        -- Initial refresh
+        refreshPlayerList()
+        
+        -- Auto refresh setiap 5 detik
+        spawn(function()
+            while true do
+                wait(5)
+                if playerFrame.Visible then
+                    refreshPlayerList()
+                end
+            end
+        end)
+        
+        -- Title Log Frame
         local title = Instance.new("TextLabel")
         title.Name = "Title"
         title.Size = UDim2.new(1, 0, 0, 30)
@@ -157,13 +304,13 @@ local function createLogViewer()
         -- Button: Copy to Clipboard
         local copyBtn = Instance.new("TextButton")
         copyBtn.Name = "CopyButton"
-        copyBtn.Size = UDim2.new(0.32, -2, 0, 35)
+        copyBtn.Size = UDim2.new(0.24, -2, 0, 35)
         copyBtn.Position = UDim2.new(0.01, 0, 1, -40)
         copyBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
         copyBtn.BorderSizePixel = 0
-        copyBtn.Text = "📋 COPY"
+        copyBtn.Text = "📋"
         copyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        copyBtn.TextSize = 13
+        copyBtn.TextSize = 16
         copyBtn.Font = Enum.Font.GothamBold
         copyBtn.Parent = frame
         
@@ -174,13 +321,13 @@ local function createLogViewer()
         -- Button: Stop/Start
         local stopBtn = Instance.new("TextButton")
         stopBtn.Name = "StopButton"
-        stopBtn.Size = UDim2.new(0.32, -2, 0, 35)
-        stopBtn.Position = UDim2.new(0.34, 0, 1, -40)
+        stopBtn.Size = UDim2.new(0.24, -2, 0, 35)
+        stopBtn.Position = UDim2.new(0.26, 0, 1, -40)
         stopBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 0)
         stopBtn.BorderSizePixel = 0
-        stopBtn.Text = "⏸️ STOP"
+        stopBtn.Text = "⏸️"
         stopBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        stopBtn.TextSize = 13
+        stopBtn.TextSize = 16
         stopBtn.Font = Enum.Font.GothamBold
         stopBtn.Parent = frame
         
@@ -188,28 +335,48 @@ local function createLogViewer()
             IS_RUNNING = not IS_RUNNING
             
             if IS_RUNNING then
-                stopBtn.Text = "⏸️ STOP"
+                stopBtn.Text = "⏸️"
                 stopBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 0)
                 log("▶️ AUTO HOP RESUMED!", "success")
                 createNotification("▶️ Started", "Auto hop resumed!", 3)
             else
-                stopBtn.Text = "▶️ START"
+                stopBtn.Text = "▶️"
                 stopBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
                 log("⏸️ AUTO HOP STOPPED!", "warning")
                 createNotification("⏸️ Stopped", "Auto hop paused", 3)
             end
         end)
         
+        -- Button: Player List
+        local playerListBtn = Instance.new("TextButton")
+        playerListBtn.Name = "PlayerListButton"
+        playerListBtn.Size = UDim2.new(0.24, -2, 0, 35)
+        playerListBtn.Position = UDim2.new(0.51, 0, 1, -40)
+        playerListBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+        playerListBtn.BorderSizePixel = 0
+        playerListBtn.Text = "👥"
+        playerListBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        playerListBtn.TextSize = 16
+        playerListBtn.Font = Enum.Font.GothamBold
+        playerListBtn.Parent = frame
+        
+        playerListBtn.MouseButton1Click:Connect(function()
+            playerFrame.Visible = not playerFrame.Visible
+            if playerFrame.Visible then
+                refreshPlayerList()
+            end
+        end)
+        
         -- Button: Close
         local closeBtn = Instance.new("TextButton")
         closeBtn.Name = "CloseButton"
-        closeBtn.Size = UDim2.new(0.32, -2, 0, 35)
-        closeBtn.Position = UDim2.new(0.67, 0, 1, -40)
+        closeBtn.Size = UDim2.new(0.24, -2, 0, 35)
+        closeBtn.Position = UDim2.new(0.76, 0, 1, -40)
         closeBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
         closeBtn.BorderSizePixel = 0
-        closeBtn.Text = "❌ CLOSE"
+        closeBtn.Text = "❌"
         closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        closeBtn.TextSize = 13
+        closeBtn.TextSize = 16
         closeBtn.Font = Enum.Font.GothamBold
         closeBtn.Parent = frame
         
