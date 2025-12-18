@@ -8,51 +8,27 @@ local LocalPlayer = Players.LocalPlayer
 local HttpService = game:GetService("HttpService")
 
 -- Konfigurasi
-local REJOIN_INTERVAL = 8 -- 8 detik
+local REJOIN_INTERVAL = 3 -- 3 detik
 local AUTO_EXECUTE = true
 
--- Fungsi untuk rejoin dengan metode alternatif
+-- Fungsi untuk rejoin dengan metode alternatif (SIMPLIFIED & FASTER)
 local function rejoinGame()
+    print("[Fish It Utility] ⏰ Starting rejoin process...")
+    
     local success, err = pcall(function()
-        print("[Fish It Utility] Preparing to rejoin...")
+        -- Metode Simple: Langsung teleport ke game tanpa server list
+        print("[Fish It Utility] 🔄 Teleporting to new server...")
         
-        -- Metode 1: Hop ke server lain (bypass restriction)
-        local serverList = {}
-        local cursor = ""
-        
-        repeat
-            local servers = game:HttpGet(string.format(
-                "https://games.roblox.com/v1/games/%s/servers/Public?sortOrder=Asc&limit=100&cursor=%s",
-                game.PlaceId,
-                cursor
-            ))
-            
-            local decoded = HttpService:JSONDecode(servers)
-            
-            for _, server in pairs(decoded.data) do
-                if server.playing < server.maxPlayers and server.id ~= game.JobId then
-                    table.insert(serverList, server.id)
-                end
-            end
-            
-            cursor = decoded.nextPageCursor or ""
-        until cursor == "" or #serverList >= 10
-        
-        if #serverList > 0 then
-            local randomServer = serverList[math.random(1, #serverList)]
-            print("[Fish It Utility] Hopping to different server...")
-            TeleportService:TeleportToPlaceInstance(game.PlaceId, randomServer, LocalPlayer)
-        else
-            -- Metode 2: Regular rejoin jika server hop gagal
-            print("[Fish It Utility] Server hop failed, using regular rejoin...")
-            TeleportService:Teleport(game.PlaceId, LocalPlayer)
-        end
+        -- Gunakan TeleportService langsung
+        TeleportService:Teleport(game.PlaceId, LocalPlayer)
     end)
     
     if not success then
-        warn("[Fish It Utility] Rejoin failed:", err)
-        -- Metode darurat: Force disconnect dan reconnect
-        LocalPlayer:Kick("Auto Rejoin - Reconnecting...")
+        warn("[Fish It Utility] ❌ Rejoin failed:", err)
+        -- Backup method: Kick and auto-reconnect
+        print("[Fish It Utility] 🔁 Using backup method...")
+        wait(1)
+        game:GetService("TeleportService"):Teleport(game.PlaceId)
     end
 end
 
@@ -70,16 +46,28 @@ local function startAutoRejoin()
     print("[Fish It Utility] Auto Server Hop: ON")
     print("[Fish It Utility] Interval: " .. REJOIN_INTERVAL .. " detik")
     print("[Fish It Utility] FULL AUTO MODE - No manual action needed!")
+    print("[Fish It Utility] Next rejoin in " .. REJOIN_INTERVAL .. " seconds...")
     print("=================================")
     
     autoExecuteScript()
     
-    -- Loop otomatis setiap 8 detik
+    -- Countdown timer untuk debug
     spawn(function()
+        local countdown = REJOIN_INTERVAL
         while true do
-            wait(REJOIN_INTERVAL)
-            createNotification("🔄 Server Hopping", "Mencari server baru...", 3)
-            rejoinGame()
+            wait(1)
+            countdown = countdown - 1
+            
+            if countdown <= 0 then
+                print("[Fish It Utility] 🚀 REJOINING NOW!")
+                createNotification("🔄 Server Hopping", "Mencari server baru...", 3)
+                wait(0.5)
+                rejoinGame()
+                countdown = REJOIN_INTERVAL -- Reset countdown
+            else
+                -- Print countdown setiap detik untuk debug
+                print("[Fish It Utility] ⏳ Rejoin in " .. countdown .. " seconds...")
+            end
         end
     end)
 end
