@@ -251,7 +251,7 @@ local function createLogViewer()
         title.Size = UDim2.new(1, -60, 0, 30)
         title.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
         title.BorderSizePixel = 0
-        title.Text = "Fish It Utility - LOG VIEWER"
+        title.Text = "FARM CANDY - Takaa"
         title.TextColor3 = Color3.fromRGB(255, 255, 255)
         title.TextSize = 14
         title.Font = Enum.Font.GothamBold
