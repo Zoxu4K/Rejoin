@@ -1,4 +1,3 @@
-
 -- Fish It Auto Rejoin Utility - MOBILE VERSION WITH IN-GAME LOG VIEWER
 -- Compatible with Delta Executor
 -- Auto rejoin ke server publik dengan player banyak
@@ -11,7 +10,7 @@ local HttpService = game:GetService("HttpService")
 -- Konfigurasi
 local REJOIN_INTERVAL = 15 -- 15 detik
 local AUTO_EXECUTE = true
-local IS_RUNNING = true -- DIUBAH: Default ON (true)
+local IS_RUNNING = true
 
 -- LOG STORAGE
 local LOG_HISTORY = {}
@@ -107,7 +106,7 @@ local function createLogViewer()
         playerFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
         playerFrame.BorderSizePixel = 2
         playerFrame.BorderColor3 = Color3.fromRGB(255, 255, 255)
-        playerFrame.Active = true
+        frame.Active = true
         playerFrame.Draggable = true
         playerFrame.Visible = false
         playerFrame.Parent = screenGui
@@ -249,7 +248,7 @@ local function createLogViewer()
         -- Title Log Frame
         local title = Instance.new("TextLabel")
         title.Name = "Title"
-        title.Size = UDim2.new(1, 0, 0, 30)
+        title.Size = UDim2.new(1, -60, 0, 30) -- DIUBAH: Dikurangi biar ada space untuk button
         title.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
         title.BorderSizePixel = 0
         title.Text = "Fish It Utility - LOG VIEWER"
@@ -257,6 +256,45 @@ local function createLogViewer()
         title.TextSize = 14
         title.Font = Enum.Font.GothamBold
         title.Parent = frame
+        
+        -- BARU: Button Minimize (-) di pojok kanan atas
+        local minimizeBtn = Instance.new("TextButton")
+        minimizeBtn.Name = "MinimizeButton"
+        minimizeBtn.Size = UDim2.new(0, 30, 0, 30)
+        minimizeBtn.Position = UDim2.new(1, -60, 0, 0)
+        minimizeBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+        minimizeBtn.BorderSizePixel = 0
+        minimizeBtn.Text = "—"
+        minimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        minimizeBtn.TextSize = 18
+        minimizeBtn.Font = Enum.Font.GothamBold
+        minimizeBtn.Parent = frame
+        
+        minimizeBtn.MouseButton1Click:Connect(function()
+            frame.Visible = false
+            log("📦 Menu minimized", "info")
+        end)
+        
+        -- BARU: Button Exit (X) di pojok kanan atas
+        local exitBtn = Instance.new("TextButton")
+        exitBtn.Name = "ExitButton"
+        exitBtn.Size = UDim2.new(0, 30, 0, 30)
+        exitBtn.Position = UDim2.new(1, -30, 0, 0)
+        exitBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
+        exitBtn.BorderSizePixel = 0
+        exitBtn.Text = "✕"
+        exitBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        exitBtn.TextSize = 16
+        exitBtn.Font = Enum.Font.GothamBold
+        exitBtn.Parent = frame
+        
+        exitBtn.MouseButton1Click:Connect(function()
+            log("🚪 Exiting Fish It Utility...", "warning")
+            createNotification("👋 Goodbye", "Fish It Utility closed!", 3)
+            wait(0.5)
+            screenGui:Destroy()
+            log("✅ GUI destroyed successfully", "success")
+        end)
         
         -- ScrollingFrame untuk log
         local scrollFrame = Instance.new("ScrollingFrame")
@@ -284,9 +322,7 @@ local function createLogViewer()
         logText.TextWrapped = true
         logText.Parent = scrollFrame
         
-        -- DIHAPUS: Button Copy to Clipboard
-        
-        -- Button: Stop/Start - DIUBAH posisi jadi di kiri
+        -- Button: Stop/Start
         local stopBtn = Instance.new("TextButton")
         stopBtn.Name = "StopButton"
         stopBtn.Size = UDim2.new(0.32, -2, 0, 35)
@@ -315,7 +351,7 @@ local function createLogViewer()
             end
         end)
         
-        -- Button: Player List - DIUBAH posisi jadi di tengah
+        -- Button: Player List
         local playerListBtn = Instance.new("TextButton")
         playerListBtn.Name = "PlayerListButton"
         playerListBtn.Size = UDim2.new(0.32, -2, 0, 35)
@@ -335,39 +371,48 @@ local function createLogViewer()
             end
         end)
         
-        -- Button: Close - DIUBAH posisi jadi di kanan
+        -- Button: Close (sekarang jadi minimize aja)
         local closeBtn = Instance.new("TextButton")
         closeBtn.Name = "CloseButton"
         closeBtn.Size = UDim2.new(0.32, -2, 0, 35)
         closeBtn.Position = UDim2.new(0.67, 0, 1, -40)
-        closeBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
+        closeBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
         closeBtn.BorderSizePixel = 0
-        closeBtn.Text = "❌"
+        closeBtn.Text = "—"
         closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        closeBtn.TextSize = 16
+        closeBtn.TextSize = 20
         closeBtn.Font = Enum.Font.GothamBold
         closeBtn.Parent = frame
         
         closeBtn.MouseButton1Click:Connect(function()
             frame.Visible = false
+            log("📦 Menu minimized", "info")
         end)
         
-        -- Button: Toggle (Minimize/Maximize) di kanan atas
+        -- DIUBAH: Button Toggle sekarang bisa di-drag
         local toggleBtn = Instance.new("TextButton")
         toggleBtn.Name = "ToggleButton"
-        toggleBtn.Size = UDim2.new(0, 60, 0, 25)
-        toggleBtn.Position = UDim2.new(1, -150, 0, 0)
+        toggleBtn.Size = UDim2.new(0, 80, 0, 30)
+        toggleBtn.Position = UDim2.new(1, -90, 0, 10)
         toggleBtn.AnchorPoint = Vector2.new(0, 0)
         toggleBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-        toggleBtn.BorderSizePixel = 0
-        toggleBtn.Text = "⚙ MENU"
+        toggleBtn.BorderSizePixel = 2
+        toggleBtn.BorderColor3 = Color3.fromRGB(255, 255, 255)
+        toggleBtn.Text = "⚙️ MENU"
         toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
         toggleBtn.TextSize = 12
         toggleBtn.Font = Enum.Font.GothamBold
+        toggleBtn.Active = true -- BARU: Ini penting!
+        toggleBtn.Draggable = true -- BARU: Ini yang bikin bisa di-drag!
         toggleBtn.Parent = screenGui
         
         toggleBtn.MouseButton1Click:Connect(function()
             frame.Visible = not frame.Visible
+            if frame.Visible then
+                log("📂 Menu opened", "info")
+            else
+                log("📦 Menu closed", "info")
+            end
         end)
         
         -- Update log text setiap detik
@@ -545,10 +590,11 @@ createNotification("⏳ Loading...", "Initializing...", 3)
 wait(3)
 createNotification("✅ SUCCESS!", "Utility loaded! Auto hop is ON", 5)
 wait(2)
-createNotification("📊 INFO", "Click ⚙ MENU button to open panel!", 8)
+createNotification("📊 INFO", "Drag ⚙️ MENU button anywhere you want!", 8)
 
 -- Start
 startAutoRejoin()
 
 log("🎮 Script running! Auto hop is ACTIVE", "success")
 log("🎯 Will find servers with MOST players!", "info")
+log("✋ You can DRAG the ⚙️ MENU button!", "info")
