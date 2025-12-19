@@ -10,11 +10,11 @@ local VirtualInputManager = game:GetService("VirtualInputManager")
 local UserInputService = game:GetService("UserInputService")
 
 -- Konfigurasi
-local REJOIN_INTERVAL = 3 -- 3 detik
+local REJOIN_INTERVAL = 5-- 3 detik
 local AUTO_EXECUTE = true
 local IS_RUNNING = true
 local AUTO_REEL = false -- Default OFF - Auto narik ikan
-local REEL_DELAY = 0.05 -- Delay antar tap (detik)
+local REEL_DELAY = 0.01 -- Delay antar tap (detik) - LEBIH CEPAT!
 
 -- LOG STORAGE
 local LOG_HISTORY = {}
@@ -85,11 +85,14 @@ local function startAutoReel()
         while true do
             if AUTO_REEL then
                 pcall(function()
-                    -- Method 1: Virtual User (paling ringan, gak block input)
-                    game:GetService("VirtualUser"):CaptureController()
-                    game:GetService("VirtualUser"):ClickButton1(Vector2.new(999999, 999999))
+                    -- SPAM CLICK LEBIH CEPAT!
+                    for i = 1, 3 do -- 3x click per loop
+                        game:GetService("VirtualUser"):CaptureController()
+                        game:GetService("VirtualUser"):ClickButton1(Vector2.new(999999, 999999))
+                        task.wait(0.001)
+                    end
                     
-                    log("🎣 Click!", "info")
+                    log("🎣 Click x3!", "info")
                 end)
             end
             
