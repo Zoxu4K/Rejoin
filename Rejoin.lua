@@ -10,7 +10,7 @@ local VirtualInputManager = game:GetService("VirtualInputManager")
 local UserInputService = game:GetService("UserInputService")
 
 -- Konfigurasi
-local REJOIN_INTERVAL = 15 -- 3 detik
+local REJOIN_INTERVAL = 3 -- 3 detik
 local AUTO_EXECUTE = true
 local IS_RUNNING = true
 local AUTO_REEL = false -- Default OFF - Auto narik ikan
@@ -84,31 +84,24 @@ local function startAutoReel()
     spawn(function()
         while true do
             if AUTO_REEL then
-                local playerGui = LocalPlayer:WaitForChild("PlayerGui")
-                
-                -- Cari reel bar (UI untuk narik ikan)
-                local reelUI = playerGui:FindFirstChild("reel")
-                
-                if reelUI and reelUI.Enabled then
-                    -- Cari bar atau button yang perlu di-tap
-                    local bar = reelUI:FindFirstChild("bar")
-                    if bar then
-                        -- Simulasi tap/click cepat
-                        pcall(function()
-                            -- Kirim mouse click event
-                            local screenSize = workspace.CurrentCamera.ViewportSize
-                            local centerX = screenSize.X / 2
-                            local centerY = screenSize.Y / 2
-                            
-                            VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, true, game, 0)
-                            wait(0.01)
-                            VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, false, game, 0)
-                        end)
-                    end
-                end
+                -- Simulasi tap/click cepat TERUS MENERUS
+                pcall(function()
+                    -- Kirim mouse click event
+                    local screenSize = workspace.CurrentCamera.ViewportSize
+                    local centerX = screenSize.X / 2
+                    local centerY = screenSize.Y / 2
+                    
+                    -- Mouse down
+                    VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, true, game, 0)
+                    task.wait(0.01)
+                    -- Mouse up
+                    VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, false, game, 0)
+                    
+                    log("🎣 Tap!", "info")
+                end)
             end
             
-            wait(REEL_DELAY)
+            task.wait(REEL_DELAY)
         end
     end)
 end
