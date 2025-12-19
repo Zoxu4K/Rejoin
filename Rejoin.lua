@@ -85,17 +85,18 @@ local function startAutoReel()
         while true do
             if AUTO_REEL then
                 -- Simulasi tap/click cepat TERUS MENERUS
+                -- PAKE AREA KECIL DI POJOK supaya gak ganggu movement
                 pcall(function()
-                    -- Kirim mouse click event
                     local screenSize = workspace.CurrentCamera.ViewportSize
-                    local centerX = screenSize.X / 2
-                    local centerY = screenSize.Y / 2
+                    -- Tap di pojok kanan bawah biar gak ganggu joystick/movement
+                    local tapX = screenSize.X * 0.85
+                    local tapY = screenSize.Y * 0.85
                     
                     -- Mouse down
-                    VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, true, game, 0)
+                    VirtualInputManager:SendMouseButtonEvent(tapX, tapY, 0, true, game, 0)
                     task.wait(0.01)
                     -- Mouse up
-                    VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, false, game, 0)
+                    VirtualInputManager:SendMouseButtonEvent(tapX, tapY, 0, false, game, 0)
                     
                     log("🎣 Tap!", "info")
                 end)
