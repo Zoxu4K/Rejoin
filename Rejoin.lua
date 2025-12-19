@@ -84,22 +84,34 @@ local function startAutoReel()
     spawn(function()
         while true do
             if AUTO_REEL then
-                -- Simulasi tap/click cepat TERUS MENERUS
-                -- PAKE AREA KECIL DI POJOK supaya gak ganggu movement
-                pcall(function()
-                    local screenSize = workspace.CurrentCamera.ViewportSize
-                    -- Tap di pojok kanan bawah biar gak ganggu joystick/movement
-                    local tapX = screenSize.X * 0.85
-                    local tapY = screenSize.Y * 0.85
-                    
-                    -- Mouse down
-                    VirtualInputManager:SendMouseButtonEvent(tapX, tapY, 0, true, game, 0)
-                    task.wait(0.01)
-                    -- Mouse up
-                    VirtualInputManager:SendMouseButtonEvent(tapX, tapY, 0, false, game, 0)
-                    
-                    log("🎣 Tap!", "info")
-                end)
+                -- Cek apakah sedang fishing (reel UI muncul)
+                local playerGui = LocalPlayer:WaitForChild("PlayerGui")
+                local reelUI = playerGui:FindFirstChild("reel")
+                
+                -- HANYA TAP kalau reel UI ada dan enabled
+                if reelUI and reelUI.Enabled then
+                    pcall(function()
+                        -- Cari button/frame di reel UI yang bisa di-click
+                        local bar = reelUI:FindFirstChild("bar")
+                        if bar then
+                            local button = bar:FindFirstChildOfClass("TextButton") or bar:FindFirstChildOfClass("ImageButton")
+                            
+                            if button and button.Visible then
+                                -- Trigger button click event langsung (gak ganggu input!)
+                                for _, connection in pairs(getconnections(button.MouseButton1Click)) do
+                                    connection:Fire()
+                                end
+                                log("🎣 Clicked button!", "info")
+                            else
+                                -- Kalau gak ada button, simulate tap ringan
+                                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+                                task.wait(0.001)
+                                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+                                log("🎣 Tap!", "info")
+                            end
+                        end
+                    end)
+                end
             end
             
             task.wait(REEL_DELAY)
