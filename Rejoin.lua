@@ -6,11 +6,15 @@ local TeleportService = game:GetService("TeleportService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local HttpService = game:GetService("HttpService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local UserInputService = game:GetService("UserInputService")
 
 -- Konfigurasi
-local REJOIN_INTERVAL = 15 -- 15 detik
+local REJOIN_INTERVAL = 15 -- 3 detik
 local AUTO_EXECUTE = true
 local IS_RUNNING = true
+local AUTO_REEL = false -- Default OFF - Auto narik ikan
+local REEL_DELAY = 0.05 -- Delay antar tap (detik)
 
 -- LOG STORAGE
 local LOG_HISTORY = {}
@@ -72,6 +76,40 @@ local function createNotification(title, text, duration)
             Duration = duration or 5,
             Icon = "rbxassetid://6031302931"
         })
+    end)
+end
+
+-- AUTO REEL FUNCTION - Otomatis tap tap narik ikan
+local function startAutoReel()
+    spawn(function()
+        while true do
+            if AUTO_REEL then
+                local playerGui = LocalPlayer:WaitForChild("PlayerGui")
+                
+                -- Cari reel bar (UI untuk narik ikan)
+                local reelUI = playerGui:FindFirstChild("reel")
+                
+                if reelUI and reelUI.Enabled then
+                    -- Cari bar atau button yang perlu di-tap
+                    local bar = reelUI:FindFirstChild("bar")
+                    if bar then
+                        -- Simulasi tap/click cepat
+                        pcall(function()
+                            -- Kirim mouse click event
+                            local screenSize = workspace.CurrentCamera.ViewportSize
+                            local centerX = screenSize.X / 2
+                            local centerY = screenSize.Y / 2
+                            
+                            VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, true, game, 0)
+                            wait(0.01)
+                            VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, false, game, 0)
+                        end)
+                    end
+                end
+            end
+            
+            wait(REEL_DELAY)
+        end
     end)
 end
 
@@ -325,7 +363,7 @@ local function createLogViewer()
         -- Button: Stop/Start
         local stopBtn = Instance.new("TextButton")
         stopBtn.Name = "StopButton"
-        stopBtn.Size = UDim2.new(0.32, -2, 0, 35)
+        stopBtn.Size = UDim2.new(0.24, -2, 0, 35)
         stopBtn.Position = UDim2.new(0.01, 0, 1, -40)
         stopBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 0)
         stopBtn.BorderSizePixel = 0
@@ -351,11 +389,38 @@ local function createLogViewer()
             end
         end)
         
+        -- Button: Auto Reel (Narik Ikan)
+        local reelBtn = Instance.new("TextButton")
+        reelBtn.Name = "ReelButton"
+        reelBtn.Size = UDim2.new(0.24, -2, 0, 35)
+        reelBtn.Position = UDim2.new(0.26, 0, 1, -40)
+        reelBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
+        reelBtn.BorderSizePixel = 0
+        reelBtn.Text = "🎣"
+        reelBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        reelBtn.TextSize = 16
+        reelBtn.Font = Enum.Font.GothamBold
+        reelBtn.Parent = frame
+        
+        reelBtn.MouseButton1Click:Connect(function()
+            AUTO_REEL = not AUTO_REEL
+            
+            if AUTO_REEL then
+                reelBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+                log("🎣 AUTO REEL ON! (Tap tap narik ikan)", "success")
+                createNotification("🎣 Auto Reel", "Auto reel enabled! Tap tap narik ikan otomatis", 3)
+            else
+                reelBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
+                log("🎣 AUTO REEL OFF!", "warning")
+                createNotification("🎣 Auto Reel", "Auto reel disabled!", 3)
+            end
+        end)
+        
         -- Button: Player List
         local playerListBtn = Instance.new("TextButton")
         playerListBtn.Name = "PlayerListButton"
-        playerListBtn.Size = UDim2.new(0.32, -2, 0, 35)
-        playerListBtn.Position = UDim2.new(0.34, 0, 1, -40)
+        playerListBtn.Size = UDim2.new(0.24, -2, 0, 35)
+        playerListBtn.Position = UDim2.new(0.51, 0, 1, -40)
         playerListBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
         playerListBtn.BorderSizePixel = 0
         playerListBtn.Text = "👥"
@@ -374,8 +439,8 @@ local function createLogViewer()
         -- Button: Close (minimize)
         local closeBtn = Instance.new("TextButton")
         closeBtn.Name = "CloseButton"
-        closeBtn.Size = UDim2.new(0.32, -2, 0, 35)
-        closeBtn.Position = UDim2.new(0.67, 0, 1, -40)
+        closeBtn.Size = UDim2.new(0.24, -2, 0, 35)
+        closeBtn.Position = UDim2.new(0.76, 0, 1, -40)
         closeBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
         closeBtn.BorderSizePixel = 0
         closeBtn.Text = "➖"
@@ -534,6 +599,7 @@ local function startAutoRejoin()
     log("✅ FISH IT UTILITY STARTED!", "success")
     log("=================================================", "info")
     log("⚡ AUTO HOP: ON (Running)", "success")
+    log("🎣 AUTO REEL: OFF (Default) - Tap tap narik ikan", "info")
     log("Rejoin Interval: " .. REJOIN_INTERVAL .. " seconds", "info")
     log("PlaceId: " .. tostring(game.PlaceId), "info")
     log("JobId: " .. tostring(game.JobId), "info")
@@ -585,6 +651,9 @@ log("Initializing Fish It Utility...", "info")
 -- Create log viewer GUI
 createLogViewer()
 
+-- Start auto reel loop
+startAutoReel()
+
 -- Notifications
 createNotification("⏳ Loading...", "Initializing...", 3)
 wait(3)
@@ -597,4 +666,5 @@ startAutoRejoin()
 
 log("🎮 Script running! Auto hop is ACTIVE", "success")
 log("🎯 Will find servers with MOST players!", "info")
+log("🎣 Auto Reel: Press 🎣 button to toggle (tap tap narik ikan)", "info")
 log("✋ You can DRAG the ⚙️ MENU button!", "info")
