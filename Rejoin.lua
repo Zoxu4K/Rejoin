@@ -10,7 +10,7 @@ local VirtualInputManager = game:GetService("VirtualInputManager")
 local UserInputService = game:GetService("UserInputService")
 
 -- Konfigurasi
-local REJOIN_INTERVAL = 5-- 3 detik
+local REJOIN_INTERVAL = 7 -- 3 detik
 local AUTO_EXECUTE = true
 local IS_RUNNING = true
 local AUTO_REEL = false -- Default OFF - Auto narik ikan
@@ -85,14 +85,15 @@ local function startAutoReel()
         while true do
             if AUTO_REEL then
                 pcall(function()
-                    -- SPAM CLICK LEBIH CEPAT!
-                    for i = 1, 3 do -- 3x click per loop
-                        game:GetService("VirtualUser"):CaptureController()
-                        game:GetService("VirtualUser"):ClickButton1(Vector2.new(999999, 999999))
-                        task.wait(0.001)
-                    end
+                    local screenSize = workspace.CurrentCamera.ViewportSize
+                    local centerX = screenSize.X / 2
+                    local centerY = screenSize.Y / 2
                     
-                    log("🎣 Click x3!", "info")
+                    -- Click di TENGAH layar dimana reel bar biasanya ada
+                    game:GetService("VirtualUser"):CaptureController()
+                    game:GetService("VirtualUser"):ClickButton1(Vector2.new(centerX, centerY))
+                    
+                    log("🎣 Click at center!", "info")
                 end)
             end
             
