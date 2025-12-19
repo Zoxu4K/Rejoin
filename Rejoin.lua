@@ -82,18 +82,40 @@ end
 -- AUTO REEL FUNCTION - Otomatis tap tap narik ikan
 local function startAutoReel()
     spawn(function()
+        local lastUICheck = 0
+        
         while true do
             if AUTO_REEL then
-                -- Cek apakah sedang fishing (reel UI muncul)
                 local playerGui = LocalPlayer:WaitForChild("PlayerGui")
-                local reelUI = playerGui:FindFirstChild("reel")
                 
-                -- HANYA TAP kalau reel UI ada dan enabled
-                if reelUI and reelUI.Enabled then
+                -- Debug: Print semua UI yang ada (setiap 5 detik)
+                if tick() - lastUICheck > 5 then
+                    lastUICheck = tick()
+                    log("📋 Checking UI list...", "info")
+                    for _, ui in pairs(playerGui:GetChildren()) do
+                        if ui:IsA("ScreenGui") and ui.Enabled then
+                            log("  - Found UI: " .. ui.Name, "info")
+                        end
+                    end
+                end
+                
+                -- Coba berbagai kemungkinan nama UI fishing
+                local possibleNames = {"reel", "Reel", "REEL", "FishingUI", "CatchUI", "shakeui", "SafeZone", "ProgressBar"}
+                local foundUI = nil
+                
+                for _, name in pairs(possibleNames) do
+                    local ui = playerGui:FindFirstChild(name)
+                    if ui and ui.Enabled then
+                        foundUI = ui
+                        log("✅ Found fishing UI: " .. name, "success")
+                        break
+                    end
+                end
+                
+                if foundUI then
                     pcall(function()
-                        -- Pakai mouse1click() - lebih simple dan gak block input
+                        -- Pakai mouse1click() di posisi tengah layar
                         mouse1click()
-                        log("🎣 Click!", "info")
                     end)
                 end
             end
