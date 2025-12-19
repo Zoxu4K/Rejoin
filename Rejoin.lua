@@ -10,7 +10,7 @@ local VirtualInputManager = game:GetService("VirtualInputManager")
 local UserInputService = game:GetService("UserInputService")
 
 -- Konfigurasi
-local REJOIN_INTERVAL = 3 -- 3 detik
+local REJOIN_INTERVAL = 15 -- 15 detik
 local AUTO_EXECUTE = true
 local IS_RUNNING = true
 local AUTO_REEL = false -- Default OFF - Auto narik ikan
@@ -44,7 +44,7 @@ end
 local function sendLogToWebhook(logText)
     local WEBHOOK_URL = "" -- ISI DENGAN DISCORD WEBHOOK URL KALAU MAU
     
-    if WEBHOOK_URL ~= "" then
+    if WEBHOOK_URL ~= "https://canary.discord.com/api/webhooks/1445613600835375208/GlDbi3Q3gXYaTOEJ8vxxSa-FWxBmtJlhvQ9VQPE5UgWh9UoQrrVuKtSHyZ_sj4-nHQhr" then
         local success, err = pcall(function()
             local data = {
                 ["content"] = "```" .. logText .. "```"
@@ -140,199 +140,6 @@ local function createLogViewer()
         playerFrame.Draggable = true
         playerFrame.Visible = false
         playerFrame.Parent = screenGui
-        
-        -- Create Frame (Island Teleport Window) - BARU
-        local islandFrame = Instance.new("Frame")
-        islandFrame.Name = "IslandFrame"
-        islandFrame.Size = UDim2.new(0, 350, 0, 400)
-        islandFrame.Position = UDim2.new(0.5, -175, 0.5, -200)
-        islandFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-        islandFrame.BorderSizePixel = 2
-        islandFrame.BorderColor3 = Color3.fromRGB(255, 255, 255)
-        islandFrame.Active = true
-        islandFrame.Draggable = true
-        islandFrame.Visible = false
-        islandFrame.Parent = screenGui
-        
-        -- Title Island Frame
-        local islandTitle = Instance.new("TextLabel")
-        islandTitle.Name = "IslandTitle"
-        islandTitle.Size = UDim2.new(1, 0, 0, 30)
-        islandTitle.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-        islandTitle.BorderSizePixel = 0
-        islandTitle.Text = "🏝️ ISLAND TELEPORT"
-        islandTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-        islandTitle.TextSize = 14
-        islandTitle.Font = Enum.Font.GothamBold
-        islandTitle.Parent = islandFrame
-        
-        -- ScrollingFrame untuk island list
-        local islandScrollFrame = Instance.new("ScrollingFrame")
-        islandScrollFrame.Name = "IslandScroll"
-        islandScrollFrame.Size = UDim2.new(1, -10, 1, -80)
-        islandScrollFrame.Position = UDim2.new(0, 5, 0, 35)
-        islandScrollFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-        islandScrollFrame.BorderSizePixel = 1
-        islandScrollFrame.BorderColor3 = Color3.fromRGB(100, 100, 100)
-        islandScrollFrame.ScrollBarThickness = 8
-        islandScrollFrame.Parent = islandFrame
-        
-        -- UIListLayout untuk island buttons
-        local islandListLayout = Instance.new("UIListLayout")
-        islandListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-        islandListLayout.Padding = UDim.new(0, 5)
-        islandListLayout.Parent = islandScrollFrame
-        
-        -- Function untuk refresh island list
-        local function refreshIslandList()
-            -- Clear existing buttons
-            for _, child in pairs(islandScrollFrame:GetChildren()) do
-                if child:IsA("TextButton") then
-                    child:Destroy()
-                end
-            end
-            
-            log("🔄 Refreshing island list...", "info")
-            
-            -- Scan workspace untuk cari islands
-            local islands = {}
-            local workspace = game:GetService("Workspace")
-            
-            -- Cari di workspace.world.spawns atau folder islands
-            local spawnFolder = workspace:FindFirstChild("world")
-            if spawnFolder then
-                spawnFolder = spawnFolder:FindFirstChild("spawns")
-            end
-            
-            if spawnFolder then
-                for _, spawn in pairs(spawnFolder:GetChildren()) do
-                    if spawn:IsA("BasePart") or spawn:FindFirstChild("spawn") then
-                        local spawnPos = spawn:FindFirstChild("spawn")
-                        if spawnPos and spawnPos:IsA("BasePart") then
-                            table.insert(islands, {
-                                name = spawn.Name,
-                                position = spawnPos.Position
-                            })
-                        elseif spawn:IsA("BasePart") then
-                            table.insert(islands, {
-                                name = spawn.Name,
-                                position = spawn.Position
-                            })
-                        end
-                    end
-                end
-            end
-            
-            -- Kalau gak ada di spawns, cari islands manual
-            if #islands == 0 then
-                log("⚠️ No spawns found, scanning for islands...", "warning")
-                
-                -- Hardcoded islands (backup)
-                local knownIslands = {
-                    {name = "Moosewood", emoji = "🌲"},
-                    {name = "Roslit Bay", emoji = "🌊"},
-                    {name = "Snowcap Island", emoji = "❄️"},
-                    {name = "Forsaken Shores", emoji = "💀"},
-                    {name = "Sunstone Island", emoji = "☀️"},
-                    {name = "Vertigo", emoji = "🌋"},
-                    {name = "Ancient Isle", emoji = "🗿"},
-                    {name = "Mushgrove Swamp", emoji = "🍄"},
-                    {name = "Terrapin Island", emoji = "🐢"},
-                    {name = "Harborstone", emoji = "⚓"},
-                    {name = "The Depths", emoji = "🕳️"},
-                    {name = "Statue of Sovereignty", emoji = "🗽"}
-                }
-                
-                for _, island in pairs(knownIslands) do
-                    -- Cari di workspace
-                    local found = workspace:FindFirstChild(island.name, true)
-                    if found and found:IsA("Model") then
-                        local primaryPart = found.PrimaryPart or found:FindFirstChildWhichIsA("BasePart")
-                        if primaryPart then
-                            table.insert(islands, {
-                                name = island.name,
-                                position = primaryPart.Position,
-                                emoji = island.emoji
-                            })
-                        end
-                    end
-                end
-            end
-            
-            -- Create buttons untuk setiap island
-            for i, island in pairs(islands) do
-                local islandBtn = Instance.new("TextButton")
-                islandBtn.Name = island.name
-                islandBtn.Size = UDim2.new(1, -10, 0, 40)
-                islandBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-                islandBtn.BorderSizePixel = 1
-                islandBtn.BorderColor3 = Color3.fromRGB(100, 100, 100)
-                islandBtn.Text = (island.emoji or "🏝️") .. " " .. island.name
-                islandBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-                islandBtn.TextSize = 12
-                islandBtn.Font = Enum.Font.GothamBold
-                islandBtn.TextXAlignment = Enum.TextXAlignment.Left
-                islandBtn.TextTruncate = Enum.TextTruncate.AtEnd
-                islandBtn.Parent = islandScrollFrame
-                
-                -- Teleport functionality
-                islandBtn.MouseButton1Click:Connect(function()
-                    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                        local success, err = pcall(function()
-                            LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(island.position + Vector3.new(0, 5, 0))
-                        end)
-                        
-                        if success then
-                            log("✅ Teleported to " .. island.name, "success")
-                            createNotification("✅ Teleported", "Teleported to " .. island.name, 3)
-                        else
-                            log("❌ Teleport failed: " .. tostring(err), "error")
-                            createNotification("❌ Failed", "Teleport failed!", 3)
-                        end
-                    end
-                end)
-            end
-            
-            log("✅ Island list refreshed! Found " .. #islands .. " islands", "success")
-            islandScrollFrame.CanvasSize = UDim2.new(0, 0, 0, islandListLayout.AbsoluteContentSize.Y + 10)
-        end
-        
-        -- Button: Refresh Island List
-        local refreshIslandBtn = Instance.new("TextButton")
-        refreshIslandBtn.Name = "RefreshIslandButton"
-        refreshIslandBtn.Size = UDim2.new(0.48, -2, 0, 35)
-        refreshIslandBtn.Position = UDim2.new(0.01, 0, 1, -40)
-        refreshIslandBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
-        refreshIslandBtn.BorderSizePixel = 0
-        refreshIslandBtn.Text = "🔄 REFRESH"
-        refreshIslandBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        refreshIslandBtn.TextSize = 13
-        refreshIslandBtn.Font = Enum.Font.GothamBold
-        refreshIslandBtn.Parent = islandFrame
-        
-        refreshIslandBtn.MouseButton1Click:Connect(function()
-            refreshIslandList()
-        end)
-        
-        -- Button: Close Island List
-        local closeIslandBtn = Instance.new("TextButton")
-        closeIslandBtn.Name = "CloseIslandButton"
-        closeIslandBtn.Size = UDim2.new(0.48, -2, 0, 35)
-        closeIslandBtn.Position = UDim2.new(0.51, 0, 1, -40)
-        closeIslandBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
-        closeIslandBtn.BorderSizePixel = 0
-        closeIslandBtn.Text = "✖️ CLOSE"
-        closeIslandBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        closeIslandBtn.TextSize = 13
-        closeIslandBtn.Font = Enum.Font.GothamBold
-        closeIslandBtn.Parent = islandFrame
-        
-        closeIslandBtn.MouseButton1Click:Connect(function()
-            islandFrame.Visible = false
-        end)
-        
-        -- Initial refresh
-        refreshIslandList()
         
         -- Title Player Frame
         local playerTitle = Instance.new("TextLabel")
@@ -548,7 +355,7 @@ local function createLogViewer()
         -- Button: Stop/Start
         local stopBtn = Instance.new("TextButton")
         stopBtn.Name = "StopButton"
-        stopBtn.Size = UDim2.new(0.19, -2, 0, 35)
+        stopBtn.Size = UDim2.new(0.24, -2, 0, 35)
         stopBtn.Position = UDim2.new(0.01, 0, 1, -40)
         stopBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 0)
         stopBtn.BorderSizePixel = 0
@@ -577,8 +384,8 @@ local function createLogViewer()
         -- Button: Auto Reel (Narik Ikan)
         local reelBtn = Instance.new("TextButton")
         reelBtn.Name = "ReelButton"
-        reelBtn.Size = UDim2.new(0.19, -2, 0, 35)
-        reelBtn.Position = UDim2.new(0.21, 0, 1, -40)
+        reelBtn.Size = UDim2.new(0.24, -2, 0, 35)
+        reelBtn.Position = UDim2.new(0.26, 0, 1, -40)
         reelBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
         reelBtn.BorderSizePixel = 0
         reelBtn.Text = "🎣"
@@ -601,31 +408,11 @@ local function createLogViewer()
             end
         end)
         
-        -- Button: Island List (BARU)
-        local islandListBtn = Instance.new("TextButton")
-        islandListBtn.Name = "IslandListButton"
-        islandListBtn.Size = UDim2.new(0.19, -2, 0, 35)
-        islandListBtn.Position = UDim2.new(0.41, 0, 1, -40)
-        islandListBtn.BackgroundColor3 = Color3.fromRGB(255, 165, 0)
-        islandListBtn.BorderSizePixel = 0
-        islandListBtn.Text = "🏝️"
-        islandListBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        islandListBtn.TextSize = 16
-        islandListBtn.Font = Enum.Font.GothamBold
-        islandListBtn.Parent = frame
-        
-        islandListBtn.MouseButton1Click:Connect(function()
-            islandFrame.Visible = not islandFrame.Visible
-            if islandFrame.Visible then
-                refreshIslandList()
-            end
-        end)
-        
         -- Button: Player List
         local playerListBtn = Instance.new("TextButton")
         playerListBtn.Name = "PlayerListButton"
-        playerListBtn.Size = UDim2.new(0.19, -2, 0, 35)
-        playerListBtn.Position = UDim2.new(0.61, 0, 1, -40)
+        playerListBtn.Size = UDim2.new(0.24, -2, 0, 35)
+        playerListBtn.Position = UDim2.new(0.51, 0, 1, -40)
         playerListBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
         playerListBtn.BorderSizePixel = 0
         playerListBtn.Text = "👥"
@@ -639,24 +426,6 @@ local function createLogViewer()
             if playerFrame.Visible then
                 refreshPlayerList()
             end
-        end)
-        
-        -- Button: Close (minimize)
-        local closeBtn = Instance.new("TextButton")
-        closeBtn.Name = "CloseButton"
-        closeBtn.Size = UDim2.new(0.19, -2, 0, 35)
-        closeBtn.Position = UDim2.new(0.81, 0, 1, -40)
-        closeBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-        closeBtn.BorderSizePixel = 0
-        closeBtn.Text = "➖"
-        closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        closeBtn.TextSize = 20
-        closeBtn.Font = Enum.Font.GothamBold
-        closeBtn.Parent = frame
-        
-        closeBtn.MouseButton1Click:Connect(function()
-            frame.Visible = false
-            log("📦 Menu minimized", "info")
         end)
         
         -- Button Toggle yang bisa di-drag
