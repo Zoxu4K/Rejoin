@@ -91,25 +91,9 @@ local function startAutoReel()
                 -- HANYA TAP kalau reel UI ada dan enabled
                 if reelUI and reelUI.Enabled then
                     pcall(function()
-                        -- Cari button/frame di reel UI yang bisa di-click
-                        local bar = reelUI:FindFirstChild("bar")
-                        if bar then
-                            local button = bar:FindFirstChildOfClass("TextButton") or bar:FindFirstChildOfClass("ImageButton")
-                            
-                            if button and button.Visible then
-                                -- Trigger button click event langsung (gak ganggu input!)
-                                for _, connection in pairs(getconnections(button.MouseButton1Click)) do
-                                    connection:Fire()
-                                end
-                                log("🎣 Clicked button!", "info")
-                            else
-                                -- Kalau gak ada button, simulate tap ringan
-                                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-                                task.wait(0.001)
-                                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
-                                log("🎣 Tap!", "info")
-                            end
-                        end
+                        -- Pakai mouse1click() - lebih simple dan gak block input
+                        mouse1click()
+                        log("🎣 Click!", "info")
                     end)
                 end
             end
