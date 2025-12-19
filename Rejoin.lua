@@ -10,7 +10,7 @@ local VirtualInputManager = game:GetService("VirtualInputManager")
 local UserInputService = game:GetService("UserInputService")
 
 -- Konfigurasi
-local REJOIN_INTERVAL = 7 -- 3 detik
+local REJOIN_INTERVAL = 6 -- 3 detik
 local AUTO_EXECUTE = true
 local IS_RUNNING = true
 local AUTO_REEL = false -- Default OFF - Auto narik ikan
@@ -85,15 +85,18 @@ local function startAutoReel()
         while true do
             if AUTO_REEL then
                 pcall(function()
+                    -- Pakai VirtualInputManager tapi di area yang gak ganggu
                     local screenSize = workspace.CurrentCamera.ViewportSize
-                    local centerX = screenSize.X / 2
-                    local centerY = screenSize.Y / 2
                     
-                    -- Click di TENGAH layar dimana reel bar biasanya ada
-                    game:GetService("VirtualUser"):CaptureController()
-                    game:GetService("VirtualUser"):ClickButton1(Vector2.new(centerX, centerY))
+                    -- Click di pojok kiri atas (biasanya kosong)
+                    local clickX = 50
+                    local clickY = 50
                     
-                    log("🎣 Click at center!", "info")
+                    -- Send click event
+                    VirtualInputManager:SendMouseButtonEvent(clickX, clickY, 0, true, game, 0)
+                    VirtualInputManager:SendMouseButtonEvent(clickX, clickY, 0, false, game, 0)
+                    
+                    log("🎣 Tap!", "info")
                 end)
             end
             
