@@ -1,4 +1,4 @@
--- Fish It Auto Rejoin Utility - MOBILE VERSION WITH IN-GAME LOG VIEWER
+-- Fish It Auto Rejoin Utility - MODERN UI VERSION
 -- Compatible with Delta Executor
 -- Auto rejoin ke server publik dengan player banyak
 
@@ -8,31 +8,42 @@ local LocalPlayer = Players.LocalPlayer
 local HttpService = game:GetService("HttpService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 
 -- Konfigurasi
-local REJOIN_INTERVAL = 15 -- 15 detik
+local REJOIN_INTERVAL = 15
 local AUTO_EXECUTE = true
 local IS_RUNNING = true
-local AUTO_REEL = false -- Default OFF - Auto narik ikan
-local REEL_DELAY = 0.01 -- Delay antar tap (detik) - LEBIH CEPAT!
+local AUTO_REEL = false
+local REEL_DELAY = 0.01
 
 -- LOG STORAGE
 local LOG_HISTORY = {}
 local MAX_LOGS = 30
 
--- Logging function dengan penyimpanan
+-- Colors
+local COLORS = {
+    bg = Color3.fromRGB(15, 15, 20),
+    bgLight = Color3.fromRGB(25, 25, 35),
+    accent = Color3.fromRGB(88, 101, 242),
+    success = Color3.fromRGB(67, 181, 129),
+    error = Color3.fromRGB(240, 71, 71),
+    warning = Color3.fromRGB(250, 166, 26),
+    text = Color3.fromRGB(255, 255, 255),
+    textDim = Color3.fromRGB(150, 150, 160)
+}
+
+-- Logging function
 local function log(message, type)
     local timestamp = os.date("%H:%M:%S")
     local prefix = "[" .. timestamp .. "]"
     local fullMessage = prefix .. " " .. message
     
-    -- Simpan ke history
     table.insert(LOG_HISTORY, fullMessage)
     if #LOG_HISTORY > MAX_LOGS then
         table.remove(LOG_HISTORY, 1)
     end
     
-    -- Print ke console
     if type == "error" then
         warn(fullMessage)
     else
@@ -40,34 +51,7 @@ local function log(message, type)
     end
 end
 
--- Fungsi untuk kirim log ke webhook Discord (OPTIONAL - ganti URL kalau mau pakai)
-local function sendLogToWebhook(logText)
-    local WEBHOOK_URL = "" -- ISI DENGAN DISCORD WEBHOOK URL KALAU MAU
-    
-    if WEBHOOK_URL ~= "https://canary.discord.com/api/webhooks/1445613600835375208/GlDbi3Q3gXYaTOEJ8vxxSa-FWxBmtJlhvQ9VQPE5UgWh9UoQrrVuKtSHyZ_sj4-nHQhr" then
-        local success, err = pcall(function()
-            local data = {
-                ["content"] = "```" .. logText .. "```"
-            }
-            request({
-                Url = WEBHOOK_URL,
-                Method = "POST",
-                Headers = {
-                    ["Content-Type"] = "application/json"
-                },
-                Body = HttpService:JSONEncode(data)
-            })
-        end)
-        
-        if success then
-            log("✅ Log sent to Discord webhook", "success")
-        else
-            log("❌ Failed to send log to webhook: " .. tostring(err), "error")
-        end
-    end
-end
-
--- UI Notification function
+-- UI Notification
 local function createNotification(title, text, duration)
     pcall(function()
         game.StarterGui:SetCore("SendNotification", {
@@ -79,20 +63,16 @@ local function createNotification(title, text, duration)
     end)
 end
 
--- AUTO REEL FUNCTION - Otomatis tap tap narik ikan
+-- AUTO REEL FUNCTION
 local function startAutoReel()
     spawn(function()
         while true do
             if AUTO_REEL then
                 pcall(function()
-                    -- Pakai VirtualInputManager tapi di area yang gak ganggu
                     local screenSize = workspace.CurrentCamera.ViewportSize
-                    
-                    -- Click di pojok kiri atas (biasanya kosong)
                     local clickX = 50
                     local clickY = 50
                     
-                    -- Send click event
                     VirtualInputManager:SendMouseButtonEvent(clickX, clickY, 0, true, game, 0)
                     VirtualInputManager:SendMouseButtonEvent(clickX, clickY, 0, false, game, 0)
                     
@@ -105,540 +85,445 @@ local function startAutoReel()
     end)
 end
 
--- CREATE IN-GAME LOG VIEWER GUI
+-- Tween helper
+local function tweenProperty(obj, props, duration, easingStyle)
+    local tween = TweenService:Create(obj, TweenInfo.new(duration or 0.3, easingStyle or Enum.EasingStyle.Quart, Enum.EasingDirection.Out), props)
+    tween:Play()
+    return tween
+end
+
+-- Create rounded frame
+local function createRoundedFrame(parent, size, position, bgColor)
+    local frame = Instance.new("Frame")
+    frame.Size = size
+    frame.Position = position
+    frame.BackgroundColor3 = bgColor
+    frame.BorderSizePixel = 0
+    frame.Parent = parent
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 12)
+    corner.Parent = frame
+    
+    return frame
+end
+
+-- Create button
+local function createButton(parent, size, position, text, bgColor, callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = size
+    btn.Position = position
+    btn.BackgroundColor3 = bgColor
+    btn.BorderSizePixel = 0
+    btn.Text = text
+    btn.TextColor3 = COLORS.text
+    btn.TextSize = 14
+    btn.Font = Enum.Font.GothamBold
+    btn.AutoButtonColor = false
+    btn.Parent = parent
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = btn
+    
+    -- Hover effect
+    btn.MouseEnter:Connect(function()
+        tweenProperty(btn, {BackgroundColor3 = Color3.new(
+            math.min(bgColor.R + 0.1, 1),
+            math.min(bgColor.G + 0.1, 1),
+            math.min(bgColor.B + 0.1, 1)
+        )}, 0.2)
+    end)
+    
+    btn.MouseLeave:Connect(function()
+        tweenProperty(btn, {BackgroundColor3 = bgColor}, 0.2)
+    end)
+    
+    -- Click effect
+    btn.MouseButton1Down:Connect(function()
+        tweenProperty(btn, {Size = UDim2.new(size.X.Scale * 0.95, 0, size.Y.Scale * 0.95, 0)}, 0.1)
+    end)
+    
+    btn.MouseButton1Up:Connect(function()
+        tweenProperty(btn, {Size = size}, 0.1)
+    end)
+    
+    if callback then
+        btn.MouseButton1Click:Connect(callback)
+    end
+    
+    return btn
+end
+
+-- CREATE MODERN UI
 local function createLogViewer()
-    log("Creating in-game log viewer GUI...", "info")
+    log("Creating modern UI...", "info")
     
     local success, err = pcall(function()
-        -- Create ScreenGui
         local screenGui = Instance.new("ScreenGui")
-        screenGui.Name = "FishItLogViewer"
+        screenGui.Name = "FishItModernUI"
         screenGui.ResetOnSpawn = false
         screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
         
-        -- Create Frame (Log Window)
-        local frame = Instance.new("Frame")
-        frame.Name = "LogFrame"
-        frame.Size = UDim2.new(0, 400, 0, 300)
-        frame.Position = UDim2.new(0.5, -200, 0.5, -150)
-        frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-        frame.BorderSizePixel = 2
-        frame.BorderColor3 = Color3.fromRGB(255, 255, 255)
-        frame.Active = true
-        frame.Draggable = true
-        frame.Parent = screenGui
+        -- Main Frame (Log Window)
+        local mainFrame = createRoundedFrame(screenGui, 
+            UDim2.new(0, 420, 0, 480), 
+            UDim2.new(0.5, -210, 0.5, -240), 
+            COLORS.bg
+        )
+        mainFrame.Active = true
+        mainFrame.Draggable = true
         
-        -- Create Frame (Player List Window)
-        local playerFrame = Instance.new("Frame")
-        playerFrame.Name = "PlayerFrame"
-        playerFrame.Size = UDim2.new(0, 350, 0, 400)
-        playerFrame.Position = UDim2.new(0.5, -175, 0.5, -200)
-        playerFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-        playerFrame.BorderSizePixel = 2
-        playerFrame.BorderColor3 = Color3.fromRGB(255, 255, 255)
-        frame.Active = true
-        playerFrame.Draggable = true
-        playerFrame.Visible = false
-        playerFrame.Parent = screenGui
+        -- Gradient overlay
+        local gradient = Instance.new("UIGradient")
+        gradient.Color = ColorSequence.new{
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(88, 101, 242)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(15, 15, 20))
+        }
+        gradient.Rotation = 135
+        gradient.Transparency = NumberSequence.new{
+            NumberSequenceKeypoint.new(0, 0.95),
+            NumberSequenceKeypoint.new(1, 0)
+        }
+        gradient.Parent = mainFrame
         
-        -- Title Player Frame
-        local playerTitle = Instance.new("TextLabel")
-        playerTitle.Name = "PlayerTitle"
-        playerTitle.Size = UDim2.new(1, 0, 0, 30)
-        playerTitle.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-        playerTitle.BorderSizePixel = 0
-        playerTitle.Text = "👥 PLAYER LIST - Teleport"
-        playerTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-        playerTitle.TextSize = 14
-        playerTitle.Font = Enum.Font.GothamBold
-        playerTitle.Parent = playerFrame
+        -- Shadow effect
+        local shadow = Instance.new("ImageLabel")
+        shadow.Name = "Shadow"
+        shadow.Size = UDim2.new(1, 40, 1, 40)
+        shadow.Position = UDim2.new(0, -20, 0, -20)
+        shadow.BackgroundTransparency = 1
+        shadow.Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"
+        shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+        shadow.ImageTransparency = 0.7
+        shadow.ScaleType = Enum.ScaleType.Slice
+        shadow.SliceCenter = Rect.new(10, 10, 118, 118)
+        shadow.ZIndex = 0
+        shadow.Parent = mainFrame
         
-        -- ScrollingFrame untuk player list
-        local playerScrollFrame = Instance.new("ScrollingFrame")
-        playerScrollFrame.Name = "PlayerScroll"
-        playerScrollFrame.Size = UDim2.new(1, -10, 1, -80)
-        playerScrollFrame.Position = UDim2.new(0, 5, 0, 35)
-        playerScrollFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-        playerScrollFrame.BorderSizePixel = 1
-        playerScrollFrame.BorderColor3 = Color3.fromRGB(100, 100, 100)
-        playerScrollFrame.ScrollBarThickness = 8
-        playerScrollFrame.Parent = playerFrame
+        -- Header
+        local header = createRoundedFrame(mainFrame, 
+            UDim2.new(1, 0, 0, 60), 
+            UDim2.new(0, 0, 0, 0), 
+            COLORS.bgLight
+        )
         
-        -- UIListLayout untuk player buttons
-        local playerListLayout = Instance.new("UIListLayout")
-        playerListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-        playerListLayout.Padding = UDim.new(0, 5)
-        playerListLayout.Parent = playerScrollFrame
-        
-        -- Function untuk refresh player list
-        local function refreshPlayerList()
-            -- Clear existing buttons
-            for _, child in pairs(playerScrollFrame:GetChildren()) do
-                if child:IsA("TextButton") then
-                    child:Destroy()
-                end
-            end
-            
-            log("🔄 Refreshing player list...", "info")
-            local playerCount = 0
-            
-            -- Create button untuk setiap player
-            for _, player in pairs(Players:GetPlayers()) do
-                if player ~= LocalPlayer then
-                    playerCount = playerCount + 1
-                    
-                    local playerBtn = Instance.new("TextButton")
-                    playerBtn.Name = player.Name
-                    playerBtn.Size = UDim2.new(1, -10, 0, 40)
-                    playerBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-                    playerBtn.BorderSizePixel = 1
-                    playerBtn.BorderColor3 = Color3.fromRGB(100, 100, 100)
-                    playerBtn.Text = "📍 " .. player.Name .. " (" .. player.DisplayName .. ")"
-                    playerBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-                    playerBtn.TextSize = 12
-                    playerBtn.Font = Enum.Font.Gotham
-                    playerBtn.TextXAlignment = Enum.TextXAlignment.Left
-                    playerBtn.TextTruncate = Enum.TextTruncate.AtEnd
-                    playerBtn.Parent = playerScrollFrame
-                    
-                    -- Teleport functionality
-                    playerBtn.MouseButton1Click:Connect(function()
-                        local targetPlayer = player
-                        if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                            local success, err = pcall(function()
-                                LocalPlayer.Character.HumanoidRootPart.CFrame = targetPlayer.Character.HumanoidRootPart.CFrame
-                            end)
-                            
-                            if success then
-                                log("✅ Teleported to " .. targetPlayer.Name, "success")
-                                createNotification("✅ Teleported", "Teleported to " .. targetPlayer.Name, 3)
-                            else
-                                log("❌ Teleport failed: " .. tostring(err), "error")
-                                createNotification("❌ Failed", "Teleport failed!", 3)
-                            end
-                        else
-                            log("⚠️ Player character not found: " .. targetPlayer.Name, "warning")
-                            createNotification("⚠️ Warning", "Player character not found!", 3)
-                        end
-                    end)
-                end
-            end
-            
-            log("✅ Player list refreshed! Found " .. playerCount .. " players", "success")
-            playerScrollFrame.CanvasSize = UDim2.new(0, 0, 0, playerListLayout.AbsoluteContentSize.Y + 10)
-        end
-        
-        -- Button: Refresh Player List
-        local refreshBtn = Instance.new("TextButton")
-        refreshBtn.Name = "RefreshButton"
-        refreshBtn.Size = UDim2.new(0.48, -2, 0, 35)
-        refreshBtn.Position = UDim2.new(0.01, 0, 1, -40)
-        refreshBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
-        refreshBtn.BorderSizePixel = 0
-        refreshBtn.Text = "🔄 REFRESH"
-        refreshBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        refreshBtn.TextSize = 13
-        refreshBtn.Font = Enum.Font.GothamBold
-        refreshBtn.Parent = playerFrame
-        
-        refreshBtn.MouseButton1Click:Connect(function()
-            refreshPlayerList()
-        end)
-        
-        -- Button: Close Player List
-        local closePlayerBtn = Instance.new("TextButton")
-        closePlayerBtn.Name = "ClosePlayerButton"
-        closePlayerBtn.Size = UDim2.new(0.48, -2, 0, 35)
-        closePlayerBtn.Position = UDim2.new(0.51, 0, 1, -40)
-        closePlayerBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
-        closePlayerBtn.BorderSizePixel = 0
-        closePlayerBtn.Text = "✖️ CLOSE"
-        closePlayerBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        closePlayerBtn.TextSize = 13
-        closePlayerBtn.Font = Enum.Font.GothamBold
-        closePlayerBtn.Parent = playerFrame
-        
-        closePlayerBtn.MouseButton1Click:Connect(function()
-            playerFrame.Visible = false
-        end)
-        
-        -- Initial refresh
-        refreshPlayerList()
-        
-        -- Auto refresh setiap 5 detik
-        spawn(function()
-            while true do
-                wait(5)
-                if playerFrame.Visible then
-                    refreshPlayerList()
-                end
-            end
-        end)
-        
-        -- Title Log Frame
+        -- Title
         local title = Instance.new("TextLabel")
-        title.Name = "Title"
-        title.Size = UDim2.new(1, -60, 0, 30)
-        title.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-        title.BorderSizePixel = 0
-        title.Text = "FARM CANDY - Takaa"
-        title.TextColor3 = Color3.fromRGB(255, 255, 255)
-        title.TextSize = 14
+        title.Size = UDim2.new(1, -120, 1, 0)
+        title.Position = UDim2.new(0, 20, 0, 0)
+        title.BackgroundTransparency = 1
+        title.Text = "🎣 FARM CANDY"
+        title.TextColor3 = COLORS.text
+        title.TextSize = 18
         title.Font = Enum.Font.GothamBold
-        title.Parent = frame
+        title.TextXAlignment = Enum.TextXAlignment.Left
+        title.Parent = header
         
-        -- Button Minimize (➖) di pojok kanan atas
-        local minimizeBtn = Instance.new("TextButton")
-        minimizeBtn.Name = "MinimizeButton"
-        minimizeBtn.Size = UDim2.new(0, 30, 0, 30)
-        minimizeBtn.Position = UDim2.new(1, -60, 0, 0)
-        minimizeBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-        minimizeBtn.BorderSizePixel = 0
-        minimizeBtn.Text = "➖"
-        minimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        minimizeBtn.TextSize = 18
-        minimizeBtn.Font = Enum.Font.GothamBold
-        minimizeBtn.Parent = frame
+        local subtitle = Instance.new("TextLabel")
+        subtitle.Size = UDim2.new(1, -120, 0, 20)
+        subtitle.Position = UDim2.new(0, 20, 0, 30)
+        subtitle.BackgroundTransparency = 1
+        subtitle.Text = "by Takaa"
+        subtitle.TextColor3 = COLORS.textDim
+        subtitle.TextSize = 12
+        subtitle.Font = Enum.Font.Gotham
+        subtitle.TextXAlignment = Enum.TextXAlignment.Left
+        subtitle.Parent = header
         
-        minimizeBtn.MouseButton1Click:Connect(function()
-            frame.Visible = false
-            log("📦 Menu minimized", "info")
-        end)
+        -- Minimize button
+        local minimizeBtn = createButton(header, 
+            UDim2.new(0, 35, 0, 35), 
+            UDim2.new(1, -80, 0.5, -17.5), 
+            "—", 
+            Color3.fromRGB(250, 166, 26),
+            function()
+                tweenProperty(mainFrame, {Size = UDim2.new(0, 0, 0, 0)}, 0.3, Enum.EasingStyle.Back)
+                wait(0.3)
+                mainFrame.Visible = false
+                log("📦 Menu minimized", "info")
+            end
+        )
         
-        -- Button Exit (✖️) di pojok kanan atas
-        local exitBtn = Instance.new("TextButton")
-        exitBtn.Name = "ExitButton"
-        exitBtn.Size = UDim2.new(0, 30, 0, 30)
-        exitBtn.Position = UDim2.new(1, -30, 0, 0)
-        exitBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
-        exitBtn.BorderSizePixel = 0
-        exitBtn.Text = "✖️"
-        exitBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        exitBtn.TextSize = 16
-        exitBtn.Font = Enum.Font.GothamBold
-        exitBtn.Parent = frame
+        -- Close button
+        local closeBtn = createButton(header, 
+            UDim2.new(0, 35, 0, 35), 
+            UDim2.new(1, -40, 0.5, -17.5), 
+            "✕", 
+            COLORS.error,
+            function()
+                log("🚪 Exiting...", "warning")
+                createNotification("👋 Goodbye", "Fish It Utility closed!", 3)
+                tweenProperty(mainFrame, {Size = UDim2.new(0, 0, 0, 0)}, 0.3, Enum.EasingStyle.Back)
+                wait(0.4)
+                screenGui:Destroy()
+            end
+        )
         
-        exitBtn.MouseButton1Click:Connect(function()
-            log("🚪 Exiting Fish It Utility...", "warning")
-            createNotification("👋 Goodbye", "Fish It Utility closed!", 3)
-            wait(0.5)
-            screenGui:Destroy()
-            log("✅ GUI destroyed successfully", "success")
-        end)
+        -- Status bar
+        local statusBar = createRoundedFrame(mainFrame, 
+            UDim2.new(1, -20, 0, 40), 
+            UDim2.new(0, 10, 0, 70), 
+            COLORS.bgLight
+        )
         
-        -- ScrollingFrame untuk log
+        local statusText = Instance.new("TextLabel")
+        statusText.Size = UDim2.new(1, -20, 1, 0)
+        statusText.Position = UDim2.new(0, 10, 0, 0)
+        statusText.BackgroundTransparency = 1
+        statusText.Text = "● Status: Running"
+        statusText.TextColor3 = COLORS.success
+        statusText.TextSize = 13
+        statusText.Font = Enum.Font.GothamMedium
+        statusText.TextXAlignment = Enum.TextXAlignment.Left
+        statusText.Parent = statusBar
+        
+        -- Log container
+        local logContainer = createRoundedFrame(mainFrame, 
+            UDim2.new(1, -20, 1, -200), 
+            UDim2.new(0, 10, 0, 120), 
+            COLORS.bgLight
+        )
+        
+        local logLabel = Instance.new("TextLabel")
+        logLabel.Size = UDim2.new(1, -20, 0, 25)
+        logLabel.Position = UDim2.new(0, 10, 0, 8)
+        logLabel.BackgroundTransparency = 1
+        logLabel.Text = "📋 Activity Logs"
+        logLabel.TextColor3 = COLORS.textDim
+        logLabel.TextSize = 12
+        logLabel.Font = Enum.Font.GothamBold
+        logLabel.TextXAlignment = Enum.TextXAlignment.Left
+        logLabel.Parent = logContainer
+        
         local scrollFrame = Instance.new("ScrollingFrame")
-        scrollFrame.Name = "LogScroll"
-        scrollFrame.Size = UDim2.new(1, -10, 1, -80)
-        scrollFrame.Position = UDim2.new(0, 5, 0, 35)
-        scrollFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-        scrollFrame.BorderSizePixel = 1
-        scrollFrame.BorderColor3 = Color3.fromRGB(100, 100, 100)
-        scrollFrame.ScrollBarThickness = 8
-        scrollFrame.Parent = frame
+        scrollFrame.Size = UDim2.new(1, -20, 1, -40)
+        scrollFrame.Position = UDim2.new(0, 10, 0, 35)
+        scrollFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
+        scrollFrame.BorderSizePixel = 0
+        scrollFrame.ScrollBarThickness = 4
+        scrollFrame.ScrollBarImageColor3 = COLORS.accent
+        scrollFrame.Parent = logContainer
         
-        -- TextLabel untuk log text
+        local scrollCorner = Instance.new("UICorner")
+        scrollCorner.CornerRadius = UDim.new(0, 6)
+        scrollCorner.Parent = scrollFrame
+        
         local logText = Instance.new("TextLabel")
-        logText.Name = "LogText"
         logText.Size = UDim2.new(1, -10, 1, 0)
         logText.Position = UDim2.new(0, 5, 0, 0)
         logText.BackgroundTransparency = 1
         logText.Text = "Waiting for logs..."
-        logText.TextColor3 = Color3.fromRGB(255, 255, 255)
-        logText.TextSize = 12
+        logText.TextColor3 = COLORS.textDim
+        logText.TextSize = 11
         logText.Font = Enum.Font.Code
         logText.TextXAlignment = Enum.TextXAlignment.Left
         logText.TextYAlignment = Enum.TextYAlignment.Top
         logText.TextWrapped = true
         logText.Parent = scrollFrame
         
-        -- Button: Stop/Start
-        local stopBtn = Instance.new("TextButton")
-        stopBtn.Name = "StopButton"
-        stopBtn.Size = UDim2.new(0.24, -2, 0, 35)
-        stopBtn.Position = UDim2.new(0.01, 0, 1, -40)
-        stopBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 0)
-        stopBtn.BorderSizePixel = 0
-        stopBtn.Text = "⏸️"
-        stopBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        stopBtn.TextSize = 16
-        stopBtn.Font = Enum.Font.GothamBold
-        stopBtn.Parent = frame
+        -- Control buttons
+        local btnContainer = createRoundedFrame(mainFrame, 
+            UDim2.new(1, -20, 0, 70), 
+            UDim2.new(0, 10, 1, -80), 
+            COLORS.bgLight
+        )
         
-        stopBtn.MouseButton1Click:Connect(function()
-            IS_RUNNING = not IS_RUNNING
-            
-            if IS_RUNNING then
-                stopBtn.Text = "⏸️"
-                stopBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 0)
-                log("▶️ AUTO HOP RESUMED!", "success")
-                createNotification("▶️ Started", "Auto hop resumed!", 3)
-            else
-                stopBtn.Text = "▶️"
-                stopBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
-                log("⏸️ AUTO HOP STOPPED!", "warning")
-                createNotification("⏸️ Stopped", "Auto hop paused", 3)
+        -- Stop/Start button
+        local stopBtn = createButton(btnContainer, 
+            UDim2.new(0.32, -5, 0, 50), 
+            UDim2.new(0, 10, 0.5, -25), 
+            "⏸ PAUSE", 
+            COLORS.warning,
+            function()
+                IS_RUNNING = not IS_RUNNING
+                if IS_RUNNING then
+                    stopBtn.Text = "⏸ PAUSE"
+                    stopBtn.BackgroundColor3 = COLORS.warning
+                    statusText.Text = "● Status: Running"
+                    statusText.TextColor3 = COLORS.success
+                    log("▶️ AUTO HOP RESUMED!", "success")
+                else
+                    stopBtn.Text = "▶ START"
+                    stopBtn.BackgroundColor3 = COLORS.success
+                    statusText.Text = "● Status: Paused"
+                    statusText.TextColor3 = COLORS.warning
+                    log("⏸️ AUTO HOP STOPPED!", "warning")
+                end
+            end
+        )
+        
+        -- Auto Reel button
+        local reelBtn = createButton(btnContainer, 
+            UDim2.new(0.32, -5, 0, 50), 
+            UDim2.new(0.34, 0, 0.5, -25), 
+            "🎣 REEL", 
+            COLORS.error,
+            function()
+                AUTO_REEL = not AUTO_REEL
+                if AUTO_REEL then
+                    reelBtn.BackgroundColor3 = COLORS.success
+                    log("🎣 AUTO REEL ON!", "success")
+                else
+                    reelBtn.BackgroundColor3 = COLORS.error
+                    log("🎣 AUTO REEL OFF!", "warning")
+                end
+            end
+        )
+        
+        -- Player List button
+        local playerBtn = createButton(btnContainer, 
+            UDim2.new(0.32, -5, 0, 50), 
+            UDim2.new(0.68, 0, 0.5, -25), 
+            "👥 PLAYERS", 
+            COLORS.accent,
+            function()
+                log("👥 Player list opened", "info")
+                -- Placeholder for player list
+            end
+        )
+        
+        -- Floating toggle button
+        local floatingBtn = Instance.new("TextButton")
+        floatingBtn.Size = UDim2.new(0, 50, 0, 50)
+        floatingBtn.Position = UDim2.new(1, -70, 0, 20)
+        floatingBtn.AnchorPoint = Vector2.new(0, 0)
+        floatingBtn.BackgroundColor3 = COLORS.accent
+        floatingBtn.BorderSizePixel = 0
+        floatingBtn.Text = "⚙"
+        floatingBtn.TextColor3 = COLORS.text
+        floatingBtn.TextSize = 24
+        floatingBtn.Font = Enum.Font.GothamBold
+        floatingBtn.Active = true
+        floatingBtn.Draggable = true
+        floatingBtn.Parent = screenGui
+        
+        local floatCorner = Instance.new("UICorner")
+        floatCorner.CornerRadius = UDim.new(1, 0)
+        floatCorner.Parent = floatingBtn
+        
+        floatingBtn.MouseButton1Click:Connect(function()
+            mainFrame.Visible = not mainFrame.Visible
+            if mainFrame.Visible then
+                mainFrame.Size = UDim2.new(0, 0, 0, 0)
+                mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+                tweenProperty(mainFrame, {
+                    Size = UDim2.new(0, 420, 0, 480),
+                    Position = UDim2.new(0.5, -210, 0.5, -240)
+                }, 0.4, Enum.EasingStyle.Back)
             end
         end)
         
-        -- Button: Auto Reel (Narik Ikan)
-        local reelBtn = Instance.new("TextButton")
-        reelBtn.Name = "ReelButton"
-        reelBtn.Size = UDim2.new(0.24, -2, 0, 35)
-        reelBtn.Position = UDim2.new(0.26, 0, 1, -40)
-        reelBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
-        reelBtn.BorderSizePixel = 0
-        reelBtn.Text = "🎣"
-        reelBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        reelBtn.TextSize = 16
-        reelBtn.Font = Enum.Font.GothamBold
-        reelBtn.Parent = frame
-        
-        reelBtn.MouseButton1Click:Connect(function()
-            AUTO_REEL = not AUTO_REEL
-            
-            if AUTO_REEL then
-                reelBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
-                log("🎣 AUTO REEL ON! (Tap tap narik ikan)", "success")
-                createNotification("🎣 Auto Reel", "Auto reel enabled! Tap tap narik ikan otomatis", 3)
-            else
-                reelBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
-                log("🎣 AUTO REEL OFF!", "warning")
-                createNotification("🎣 Auto Reel", "Auto reel disabled!", 3)
+        -- Pulse animation for floating button
+        spawn(function()
+            while true do
+                tweenProperty(floatingBtn, {Size = UDim2.new(0, 55, 0, 55)}, 1, Enum.EasingStyle.Sine)
+                wait(1)
+                tweenProperty(floatingBtn, {Size = UDim2.new(0, 50, 0, 50)}, 1, Enum.EasingStyle.Sine)
+                wait(1)
             end
         end)
         
-        -- Button: Player List
-        local playerListBtn = Instance.new("TextButton")
-        playerListBtn.Name = "PlayerListButton"
-        playerListBtn.Size = UDim2.new(0.24, -2, 0, 35)
-        playerListBtn.Position = UDim2.new(0.51, 0, 1, -40)
-        playerListBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
-        playerListBtn.BorderSizePixel = 0
-        playerListBtn.Text = "👥"
-        playerListBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        playerListBtn.TextSize = 16
-        playerListBtn.Font = Enum.Font.GothamBold
-        playerListBtn.Parent = frame
-        
-        playerListBtn.MouseButton1Click:Connect(function()
-            playerFrame.Visible = not playerFrame.Visible
-            if playerFrame.Visible then
-                refreshPlayerList()
-            end
-        end)
-        
-        -- Button Toggle yang bisa di-drag
-        local toggleBtn = Instance.new("TextButton")
-        toggleBtn.Name = "ToggleButton"
-        toggleBtn.Size = UDim2.new(0, 80, 0, 30)
-        toggleBtn.Position = UDim2.new(1, -90, 0, 10)
-        toggleBtn.AnchorPoint = Vector2.new(0, 0)
-        toggleBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-        toggleBtn.BorderSizePixel = 2
-        toggleBtn.BorderColor3 = Color3.fromRGB(255, 255, 255)
-        toggleBtn.Text = "⚙️ MENU"
-        toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        toggleBtn.TextSize = 12
-        toggleBtn.Font = Enum.Font.GothamBold
-        toggleBtn.Active = true
-        toggleBtn.Draggable = true
-        toggleBtn.Parent = screenGui
-        
-        toggleBtn.MouseButton1Click:Connect(function()
-            frame.Visible = not frame.Visible
-            if frame.Visible then
-                log("📂 Menu opened", "info")
-            else
-                log("📦 Menu closed", "info")
-            end
-        end)
-        
-        -- Update log text setiap detik
+        -- Update logs
         spawn(function()
             while true do
                 wait(1)
                 local displayLog = table.concat(LOG_HISTORY, "\n")
                 logText.Text = displayLog
-                
-                -- Auto scroll ke bawah
                 scrollFrame.CanvasSize = UDim2.new(0, 0, 0, logText.TextBounds.Y + 10)
                 scrollFrame.CanvasPosition = Vector2.new(0, scrollFrame.CanvasSize.Y.Offset)
             end
         end)
         
         screenGui.Parent = game:GetService("CoreGui")
-        log("✅ Log viewer GUI created successfully!", "success")
+        log("✅ Modern UI created!", "success")
+        
+        -- Entrance animation
+        mainFrame.Size = UDim2.new(0, 0, 0, 0)
+        mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+        wait(0.1)
+        tweenProperty(mainFrame, {
+            Size = UDim2.new(0, 420, 0, 480),
+            Position = UDim2.new(0.5, -210, 0.5, -240)
+        }, 0.5, Enum.EasingStyle.Back)
     end)
     
     if not success then
-        log("❌ Failed to create log viewer: " .. tostring(err), "error")
+        log("❌ Failed to create UI: " .. tostring(err), "error")
     end
 end
 
--- Fungsi rejoin untuk cari server dengan PLAYER PALING BANYAK
+-- Rejoin function
 local function rejoinGame()
-    log("========== REJOIN PROCESS STARTED ==========", "info")
-    log("Current PlaceId: " .. tostring(game.PlaceId), "info")
-    log("Current JobId: " .. tostring(game.JobId), "info")
-    log("Player Name: " .. tostring(LocalPlayer.Name), "info")
+    log("========== REJOIN STARTED ==========", "info")
+    log("PlaceId: " .. tostring(game.PlaceId), "info")
     
     local success, err = pcall(function()
-        log("Step 1: Fetching PUBLIC servers with MOST players...", "info")
-        
         local bestServer = nil
         local maxPlayers = 0
-        local cursor = ""
-        local attempts = 0
-        local maxAttempts = 5
         
-        repeat
-            attempts = attempts + 1
-            log("Scanning page " .. attempts .. "/" .. maxAttempts .. "...", "info")
-            
-            local url = string.format(
-                "https://games.roblox.com/v1/games/%s/servers/Public?sortOrder=Desc&limit=100&cursor=%s",
-                game.PlaceId,
-                cursor
-            )
-            
-            local httpSuccess, servers = pcall(function()
-                return game:HttpGet(url)
-            end)
-            
-            if not httpSuccess then
-                log("❌ HTTP Request FAILED: " .. tostring(servers), "error")
-                break
-            end
-            
-            log("✅ HTTP Request SUCCESS!", "success")
-            
-            local decoded = HttpService:JSONDecode(servers)
-            
-            if decoded.data then
-                log("Processing " .. #decoded.data .. " servers...", "info")
-                
-                for i, server in pairs(decoded.data) do
-                    if server.id ~= game.JobId and server.playing < server.maxPlayers then
-                        if server.playing > maxPlayers then
-                            maxPlayers = server.playing
-                            bestServer = server.id
-                            log("✅ Found better server: " .. server.playing .. "/" .. server.maxPlayers .. " players", "success")
-                        end
+        local url = string.format(
+            "https://games.roblox.com/v1/games/%s/servers/Public?sortOrder=Desc&limit=100",
+            game.PlaceId
+        )
+        
+        local servers = game:HttpGet(url)
+        local decoded = HttpService:JSONDecode(servers)
+        
+        if decoded.data then
+            for i, server in pairs(decoded.data) do
+                if server.id ~= game.JobId and server.playing < server.maxPlayers then
+                    if server.playing > maxPlayers then
+                        maxPlayers = server.playing
+                        bestServer = server.id
                     end
                 end
             end
-            
-            cursor = decoded.nextPageCursor or ""
-            
-        until cursor == "" or attempts >= maxAttempts
+        end
         
         if bestServer then
-            log("🎯 BEST SERVER FOUND: " .. maxPlayers .. " players online!", "success")
-            log("Server ID: " .. bestServer, "info")
-            log("Step 2: Teleporting to best server...", "info")
-            
-            createNotification("🚀 Server Hop", "Pindah ke server dengan " .. maxPlayers .. " players!", 4)
-            wait(1)
-            
+            log("🎯 Best server: " .. maxPlayers .. " players!", "success")
             TeleportService:TeleportToPlaceInstance(game.PlaceId, bestServer, LocalPlayer)
-            log("✅ Teleport command sent!", "success")
         else
-            log("⚠️ No suitable servers found, using fallback rejoin", "warning")
-            createNotification("🔄 Rejoin", "Reconnecting to any server...", 3)
-            wait(1)
-            
+            log("🔄 Fallback rejoin", "warning")
             TeleportService:Teleport(game.PlaceId, LocalPlayer)
         end
     end)
     
     if not success then
-        log("❌ CRITICAL ERROR: " .. tostring(err), "error")
-        createNotification("❌ Error", "Rejoin failed!", 5)
-        sendLogToWebhook(table.concat(LOG_HISTORY, "\n"))
-        
-        log("Attempting emergency kick...", "warning")
-        wait(2)
-        pcall(function()
-            LocalPlayer:Kick("Auto Rejoin - Reconnecting...")
-        end)
+        log("❌ ERROR: " .. tostring(err), "error")
     end
-    
-    log("========== REJOIN PROCESS ENDED ==========", "info")
 end
 
 -- Main loop
 local function startAutoRejoin()
-    log("=================================================", "info")
     log("✅ FISH IT UTILITY STARTED!", "success")
-    log("=================================================", "info")
-    log("⚡ AUTO HOP: ON (Running)", "success")
-    log("🎣 AUTO REEL: OFF (Default) - Tap tap narik ikan", "info")
-    log("Rejoin Interval: " .. REJOIN_INTERVAL .. " seconds", "info")
-    log("PlaceId: " .. tostring(game.PlaceId), "info")
-    log("JobId: " .. tostring(game.JobId), "info")
-    log("Player: " .. tostring(LocalPlayer.Name), "info")
-    log("=================================================", "info")
     
-    -- Test HTTP
-    log("Testing HTTP capability...", "info")
-    local httpTest, httpResult = pcall(function()
-        return game:HttpGet("https://httpbin.org/get")
-    end)
-    log("HTTP Test: " .. tostring(httpTest), httpTest and "success" or "error")
-    if not httpTest then
-        log("❌ HTTP ERROR: " .. tostring(httpResult), "error")
-        log("⚠️ WARNING: Rejoin might not work!", "warning")
-    end
-    
-    log("Starting countdown loop...", "info")
-    
-    -- Countdown loop
     spawn(function()
         local countdown = REJOIN_INTERVAL
-        
         while true do
             if IS_RUNNING then
                 if countdown > 0 then
-                    log("⏳ Next rejoin in " .. countdown .. " seconds", "info")
+                    log("⏳ Next rejoin: " .. countdown .. "s", "info")
                     wait(1)
                     countdown = countdown - 1
                 else
-                    log("🚀 COUNTDOWN COMPLETE! Starting rejoin...", "success")
                     rejoinGame()
                     countdown = REJOIN_INTERVAL
                 end
             else
-                log("⏸️ Auto hop is PAUSED (Press ▶️ to START)", "warning")
                 countdown = REJOIN_INTERVAL
                 wait(2)
             end
         end
     end)
-    
-    log("✅ Main loop started!", "success")
 end
 
--- Setup everything
+-- Initialize
 log("Initializing Fish It Utility...", "info")
-
--- Create log viewer GUI
 createLogViewer()
-
--- Start auto reel loop
 startAutoReel()
-
--- Notifications
-createNotification("⏳ Loading...", "Initializing...", 3)
-wait(3)
-createNotification("✅ SUCCESS!", "Utility loaded! Auto hop is ON", 5)
+createNotification("✅ SUCCESS!", "Modern UI loaded!", 5)
 wait(2)
-createNotification("📊 INFO", "Drag ⚙️ MENU button anywhere you want!", 8)
-
--- Start
 startAutoRejoin()
-
-log("🎮 Script running! Auto hop is ACTIVE", "success")
-log("🎯 Will find servers with MOST players!", "info")
-log("🎣 Auto Reel: Press 🎣 button to toggle (tap tap narik ikan)", "info")
-log("✋ You can DRAG the ⚙️ MENU button!", "info")
+log("🎮 Script running!", "success")
