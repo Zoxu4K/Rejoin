@@ -85,79 +85,11 @@ local function startAutoReel()
     end)
 end
 
--- Tween helper
-local function tweenProperty(obj, props, duration, easingStyle)
-    local tween = TweenService:Create(obj, TweenInfo.new(duration or 0.3, easingStyle or Enum.EasingStyle.Quart, Enum.EasingDirection.Out), props)
-    tween:Play()
-    return tween
-end
+-- Helper functions removed for simplicity
 
--- Create rounded frame
-local function createRoundedFrame(parent, size, position, bgColor)
-    local frame = Instance.new("Frame")
-    frame.Size = size
-    frame.Position = position
-    frame.BackgroundColor3 = bgColor
-    frame.BorderSizePixel = 0
-    frame.Parent = parent
-    
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 12)
-    corner.Parent = frame
-    
-    return frame
-end
-
--- Create button
-local function createButton(parent, size, position, text, bgColor, callback)
-    local btn = Instance.new("TextButton")
-    btn.Size = size
-    btn.Position = position
-    btn.BackgroundColor3 = bgColor
-    btn.BorderSizePixel = 0
-    btn.Text = text
-    btn.TextColor3 = COLORS.text
-    btn.TextSize = 14
-    btn.Font = Enum.Font.GothamBold
-    btn.AutoButtonColor = false
-    btn.Parent = parent
-    
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 8)
-    corner.Parent = btn
-    
-    -- Hover effect
-    btn.MouseEnter:Connect(function()
-        tweenProperty(btn, {BackgroundColor3 = Color3.new(
-            math.min(bgColor.R + 0.1, 1),
-            math.min(bgColor.G + 0.1, 1),
-            math.min(bgColor.B + 0.1, 1)
-        )}, 0.2)
-    end)
-    
-    btn.MouseLeave:Connect(function()
-        tweenProperty(btn, {BackgroundColor3 = bgColor}, 0.2)
-    end)
-    
-    -- Click effect
-    btn.MouseButton1Down:Connect(function()
-        tweenProperty(btn, {Size = UDim2.new(size.X.Scale * 0.95, 0, size.Y.Scale * 0.95, 0)}, 0.1)
-    end)
-    
-    btn.MouseButton1Up:Connect(function()
-        tweenProperty(btn, {Size = size}, 0.1)
-    end)
-    
-    if callback then
-        btn.MouseButton1Click:Connect(callback)
-    end
-    
-    return btn
-end
-
--- CREATE MODERN UI
+-- CREATE SIMPLE CLEAN UI
 local function createLogViewer()
-    log("Creating modern UI...", "info")
+    log("Creating UI...", "info")
     
     local success, err = pcall(function()
         local screenGui = Instance.new("ScreenGui")
@@ -165,148 +97,88 @@ local function createLogViewer()
         screenGui.ResetOnSpawn = false
         screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
         
-        -- Main Frame (Log Window)
-        local mainFrame = createRoundedFrame(screenGui, 
-            UDim2.new(0, 420, 0, 480), 
-            UDim2.new(0.5, -210, 0.5, -240), 
-            COLORS.bg
-        )
+        -- Main Frame
+        local mainFrame = Instance.new("Frame")
+        mainFrame.Size = UDim2.new(0, 380, 0, 420)
+        mainFrame.Position = UDim2.new(0.5, -190, 0.5, -210)
+        mainFrame.BackgroundColor3 = COLORS.bg
+        mainFrame.BorderSizePixel = 0
         mainFrame.Active = true
         mainFrame.Draggable = true
+        mainFrame.Parent = screenGui
         
-        -- Gradient overlay
-        local gradient = Instance.new("UIGradient")
-        gradient.Color = ColorSequence.new{
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(88, 101, 242)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(15, 15, 20))
-        }
-        gradient.Rotation = 135
-        gradient.Transparency = NumberSequence.new{
-            NumberSequenceKeypoint.new(0, 0.95),
-            NumberSequenceKeypoint.new(1, 0)
-        }
-        gradient.Parent = mainFrame
-        
-        -- Shadow effect
-        local shadow = Instance.new("ImageLabel")
-        shadow.Name = "Shadow"
-        shadow.Size = UDim2.new(1, 40, 1, 40)
-        shadow.Position = UDim2.new(0, -20, 0, -20)
-        shadow.BackgroundTransparency = 1
-        shadow.Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"
-        shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
-        shadow.ImageTransparency = 0.7
-        shadow.ScaleType = Enum.ScaleType.Slice
-        shadow.SliceCenter = Rect.new(10, 10, 118, 118)
-        shadow.ZIndex = 0
-        shadow.Parent = mainFrame
+        local mainCorner = Instance.new("UICorner")
+        mainCorner.CornerRadius = UDim.new(0, 10)
+        mainCorner.Parent = mainFrame
         
         -- Header
-        local header = createRoundedFrame(mainFrame, 
-            UDim2.new(1, 0, 0, 60), 
-            UDim2.new(0, 0, 0, 0), 
-            COLORS.bgLight
-        )
+        local header = Instance.new("Frame")
+        header.Size = UDim2.new(1, 0, 0, 50)
+        header.BackgroundColor3 = COLORS.bgLight
+        header.BorderSizePixel = 0
+        header.Parent = mainFrame
+        
+        local headerCorner = Instance.new("UICorner")
+        headerCorner.CornerRadius = UDim.new(0, 10)
+        headerCorner.Parent = header
         
         -- Title
         local title = Instance.new("TextLabel")
-        title.Size = UDim2.new(1, -120, 1, 0)
-        title.Position = UDim2.new(0, 20, 0, 0)
+        title.Size = UDim2.new(1, -100, 1, 0)
+        title.Position = UDim2.new(0, 15, 0, 0)
         title.BackgroundTransparency = 1
-        title.Text = "🎣 FARM CANDY"
+        title.Text = "🎣 FARM CANDY - Takaa"
         title.TextColor3 = COLORS.text
-        title.TextSize = 18
+        title.TextSize = 16
         title.Font = Enum.Font.GothamBold
         title.TextXAlignment = Enum.TextXAlignment.Left
         title.Parent = header
         
-        local subtitle = Instance.new("TextLabel")
-        subtitle.Size = UDim2.new(1, -120, 0, 20)
-        subtitle.Position = UDim2.new(0, 20, 0, 30)
-        subtitle.BackgroundTransparency = 1
-        subtitle.Text = "by Takaa"
-        subtitle.TextColor3 = COLORS.textDim
-        subtitle.TextSize = 12
-        subtitle.Font = Enum.Font.Gotham
-        subtitle.TextXAlignment = Enum.TextXAlignment.Left
-        subtitle.Parent = header
-        
-        -- Minimize button
-        local minimizeBtn = createButton(header, 
-            UDim2.new(0, 35, 0, 35), 
-            UDim2.new(1, -80, 0.5, -17.5), 
-            "—", 
-            Color3.fromRGB(250, 166, 26),
-            function()
-                tweenProperty(mainFrame, {Size = UDim2.new(0, 0, 0, 0)}, 0.3, Enum.EasingStyle.Back)
-                wait(0.3)
-                mainFrame.Visible = false
-                log("📦 Menu minimized", "info")
-            end
-        )
-        
         -- Close button
-        local closeBtn = createButton(header, 
-            UDim2.new(0, 35, 0, 35), 
-            UDim2.new(1, -40, 0.5, -17.5), 
-            "✕", 
-            COLORS.error,
-            function()
-                log("🚪 Exiting...", "warning")
-                createNotification("👋 Goodbye", "Fish It Utility closed!", 3)
-                tweenProperty(mainFrame, {Size = UDim2.new(0, 0, 0, 0)}, 0.3, Enum.EasingStyle.Back)
-                wait(0.4)
-                screenGui:Destroy()
-            end
-        )
+        local closeBtn = Instance.new("TextButton")
+        closeBtn.Size = UDim2.new(0, 35, 0, 35)
+        closeBtn.Position = UDim2.new(1, -45, 0.5, -17.5)
+        closeBtn.BackgroundColor3 = COLORS.error
+        closeBtn.BorderSizePixel = 0
+        closeBtn.Text = "✕"
+        closeBtn.TextColor3 = COLORS.text
+        closeBtn.TextSize = 16
+        closeBtn.Font = Enum.Font.GothamBold
+        closeBtn.Parent = header
         
-        -- Status bar
-        local statusBar = createRoundedFrame(mainFrame, 
-            UDim2.new(1, -20, 0, 40), 
-            UDim2.new(0, 10, 0, 70), 
-            COLORS.bgLight
-        )
+        local closeCorner = Instance.new("UICorner")
+        closeCorner.CornerRadius = UDim.new(0, 8)
+        closeCorner.Parent = closeBtn
         
+        closeBtn.MouseButton1Click:Connect(function()
+            log("🚪 Exiting...", "warning")
+            screenGui:Destroy()
+        end)
+        
+        -- Status indicator
         local statusText = Instance.new("TextLabel")
-        statusText.Size = UDim2.new(1, -20, 1, 0)
-        statusText.Position = UDim2.new(0, 10, 0, 0)
+        statusText.Size = UDim2.new(1, -20, 0, 30)
+        statusText.Position = UDim2.new(0, 10, 0, 60)
         statusText.BackgroundTransparency = 1
-        statusText.Text = "● Status: Running"
+        statusText.Text = "● Running"
         statusText.TextColor3 = COLORS.success
         statusText.TextSize = 13
         statusText.Font = Enum.Font.GothamMedium
         statusText.TextXAlignment = Enum.TextXAlignment.Left
-        statusText.Parent = statusBar
+        statusText.Parent = mainFrame
         
         -- Log container
-        local logContainer = createRoundedFrame(mainFrame, 
-            UDim2.new(1, -20, 1, -200), 
-            UDim2.new(0, 10, 0, 120), 
-            COLORS.bgLight
-        )
-        
-        local logLabel = Instance.new("TextLabel")
-        logLabel.Size = UDim2.new(1, -20, 0, 25)
-        logLabel.Position = UDim2.new(0, 10, 0, 8)
-        logLabel.BackgroundTransparency = 1
-        logLabel.Text = "📋 Activity Logs"
-        logLabel.TextColor3 = COLORS.textDim
-        logLabel.TextSize = 12
-        logLabel.Font = Enum.Font.GothamBold
-        logLabel.TextXAlignment = Enum.TextXAlignment.Left
-        logLabel.Parent = logContainer
-        
         local scrollFrame = Instance.new("ScrollingFrame")
-        scrollFrame.Size = UDim2.new(1, -20, 1, -40)
-        scrollFrame.Position = UDim2.new(0, 10, 0, 35)
-        scrollFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
+        scrollFrame.Size = UDim2.new(1, -20, 1, -170)
+        scrollFrame.Position = UDim2.new(0, 10, 0, 95)
+        scrollFrame.BackgroundColor3 = COLORS.bgLight
         scrollFrame.BorderSizePixel = 0
         scrollFrame.ScrollBarThickness = 4
         scrollFrame.ScrollBarImageColor3 = COLORS.accent
-        scrollFrame.Parent = logContainer
+        scrollFrame.Parent = mainFrame
         
         local scrollCorner = Instance.new("UICorner")
-        scrollCorner.CornerRadius = UDim.new(0, 6)
+        scrollCorner.CornerRadius = UDim.new(0, 8)
         scrollCorner.Parent = scrollFrame
         
         local logText = Instance.new("TextLabel")
@@ -322,77 +194,78 @@ local function createLogViewer()
         logText.TextWrapped = true
         logText.Parent = scrollFrame
         
-        -- Control buttons
-        local btnContainer = createRoundedFrame(mainFrame, 
-            UDim2.new(1, -20, 0, 70), 
-            UDim2.new(0, 10, 1, -80), 
-            COLORS.bgLight
-        )
+        -- Control buttons container
+        local btnY = -60
         
         -- Stop/Start button
-        local stopBtn = createButton(btnContainer, 
-            UDim2.new(0.32, -5, 0, 50), 
-            UDim2.new(0, 10, 0.5, -25), 
-            "⏸ PAUSE", 
-            COLORS.warning,
-            function()
-                IS_RUNNING = not IS_RUNNING
-                if IS_RUNNING then
-                    stopBtn.Text = "⏸ PAUSE"
-                    stopBtn.BackgroundColor3 = COLORS.warning
-                    statusText.Text = "● Status: Running"
-                    statusText.TextColor3 = COLORS.success
-                    log("▶️ AUTO HOP RESUMED!", "success")
-                else
-                    stopBtn.Text = "▶ START"
-                    stopBtn.BackgroundColor3 = COLORS.success
-                    statusText.Text = "● Status: Paused"
-                    statusText.TextColor3 = COLORS.warning
-                    log("⏸️ AUTO HOP STOPPED!", "warning")
-                end
+        local stopBtn = Instance.new("TextButton")
+        stopBtn.Size = UDim2.new(0.48, 0, 0, 45)
+        stopBtn.Position = UDim2.new(0, 10, 1, btnY)
+        stopBtn.BackgroundColor3 = COLORS.warning
+        stopBtn.BorderSizePixel = 0
+        stopBtn.Text = "⏸ PAUSE"
+        stopBtn.TextColor3 = COLORS.text
+        stopBtn.TextSize = 13
+        stopBtn.Font = Enum.Font.GothamBold
+        stopBtn.Parent = mainFrame
+        
+        local stopCorner = Instance.new("UICorner")
+        stopCorner.CornerRadius = UDim.new(0, 8)
+        stopCorner.Parent = stopBtn
+        
+        stopBtn.MouseButton1Click:Connect(function()
+            IS_RUNNING = not IS_RUNNING
+            if IS_RUNNING then
+                stopBtn.Text = "⏸ PAUSE"
+                stopBtn.BackgroundColor3 = COLORS.warning
+                statusText.Text = "● Running"
+                statusText.TextColor3 = COLORS.success
+                log("▶️ RESUMED!", "success")
+            else
+                stopBtn.Text = "▶ START"
+                stopBtn.BackgroundColor3 = COLORS.success
+                statusText.Text = "● Paused"
+                statusText.TextColor3 = COLORS.warning
+                log("⏸️ PAUSED!", "warning")
             end
-        )
+        end)
         
         -- Auto Reel button
-        local reelBtn = createButton(btnContainer, 
-            UDim2.new(0.32, -5, 0, 50), 
-            UDim2.new(0.34, 0, 0.5, -25), 
-            "🎣 REEL", 
-            COLORS.error,
-            function()
-                AUTO_REEL = not AUTO_REEL
-                if AUTO_REEL then
-                    reelBtn.BackgroundColor3 = COLORS.success
-                    log("🎣 AUTO REEL ON!", "success")
-                else
-                    reelBtn.BackgroundColor3 = COLORS.error
-                    log("🎣 AUTO REEL OFF!", "warning")
-                end
-            end
-        )
+        local reelBtn = Instance.new("TextButton")
+        reelBtn.Size = UDim2.new(0.48, 0, 0, 45)
+        reelBtn.Position = UDim2.new(0.52, 0, 1, btnY)
+        reelBtn.BackgroundColor3 = COLORS.error
+        reelBtn.BorderSizePixel = 0
+        reelBtn.Text = "🎣 REEL"
+        reelBtn.TextColor3 = COLORS.text
+        reelBtn.TextSize = 13
+        reelBtn.Font = Enum.Font.GothamBold
+        reelBtn.Parent = mainFrame
         
-        -- Player List button
-        local playerBtn = createButton(btnContainer, 
-            UDim2.new(0.32, -5, 0, 50), 
-            UDim2.new(0.68, 0, 0.5, -25), 
-            "👥 PLAYERS", 
-            COLORS.accent,
-            function()
-                log("👥 Player list opened", "info")
-                -- Placeholder for player list
+        local reelCorner = Instance.new("UICorner")
+        reelCorner.CornerRadius = UDim.new(0, 8)
+        reelCorner.Parent = reelBtn
+        
+        reelBtn.MouseButton1Click:Connect(function()
+            AUTO_REEL = not AUTO_REEL
+            if AUTO_REEL then
+                reelBtn.BackgroundColor3 = COLORS.success
+                log("🎣 REEL ON!", "success")
+            else
+                reelBtn.BackgroundColor3 = COLORS.error
+                log("🎣 REEL OFF!", "warning")
             end
-        )
+        end)
         
         -- Floating toggle button
         local floatingBtn = Instance.new("TextButton")
         floatingBtn.Size = UDim2.new(0, 50, 0, 50)
         floatingBtn.Position = UDim2.new(1, -70, 0, 20)
-        floatingBtn.AnchorPoint = Vector2.new(0, 0)
         floatingBtn.BackgroundColor3 = COLORS.accent
         floatingBtn.BorderSizePixel = 0
         floatingBtn.Text = "⚙"
         floatingBtn.TextColor3 = COLORS.text
-        floatingBtn.TextSize = 24
+        floatingBtn.TextSize = 22
         floatingBtn.Font = Enum.Font.GothamBold
         floatingBtn.Active = true
         floatingBtn.Draggable = true
@@ -404,24 +277,6 @@ local function createLogViewer()
         
         floatingBtn.MouseButton1Click:Connect(function()
             mainFrame.Visible = not mainFrame.Visible
-            if mainFrame.Visible then
-                mainFrame.Size = UDim2.new(0, 0, 0, 0)
-                mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-                tweenProperty(mainFrame, {
-                    Size = UDim2.new(0, 420, 0, 480),
-                    Position = UDim2.new(0.5, -210, 0.5, -240)
-                }, 0.4, Enum.EasingStyle.Back)
-            end
-        end)
-        
-        -- Pulse animation for floating button
-        spawn(function()
-            while true do
-                tweenProperty(floatingBtn, {Size = UDim2.new(0, 55, 0, 55)}, 1, Enum.EasingStyle.Sine)
-                wait(1)
-                tweenProperty(floatingBtn, {Size = UDim2.new(0, 50, 0, 50)}, 1, Enum.EasingStyle.Sine)
-                wait(1)
-            end
         end)
         
         -- Update logs
@@ -436,16 +291,7 @@ local function createLogViewer()
         end)
         
         screenGui.Parent = game:GetService("CoreGui")
-        log("✅ Modern UI created!", "success")
-        
-        -- Entrance animation
-        mainFrame.Size = UDim2.new(0, 0, 0, 0)
-        mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-        wait(0.1)
-        tweenProperty(mainFrame, {
-            Size = UDim2.new(0, 420, 0, 480),
-            Position = UDim2.new(0.5, -210, 0.5, -240)
-        }, 0.5, Enum.EasingStyle.Back)
+        log("✅ UI created!", "success")
     end)
     
     if not success then
