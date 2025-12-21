@@ -18,6 +18,7 @@ local waitTime = 30 * 60
 local copiedCoord = nil
 local homeCoord = nil
 local tujuanCoord = nil
+local currentTab = "teleport"
 
 -- Config
 local CONFIG = "XmasConfig.json"
@@ -127,8 +128,8 @@ local function createGUI()
     -- Main Frame
     mainFrame = Instance.new("Frame")
     mainFrame.Name = "MainFrame"
-    mainFrame.Size = UDim2.new(0, 380, 0, 460)
-    mainFrame.Position = UDim2.new(0.5, -190, 0.5, -230)
+    mainFrame.Size = UDim2.new(0, 450, 0, 480)
+    mainFrame.Position = UDim2.new(0.5, -225, 0.5, -240)
     mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
     mainFrame.BorderSizePixel = 0
     mainFrame.Active = true
@@ -201,44 +202,95 @@ local function createGUI()
     cCorner.CornerRadius = UDim.new(0, 5)
     cCorner.Parent = closeBtn
 
-    -- Content Frame
-    local content = Instance.new("Frame")
-    content.Name = "Content"
-    content.Size = UDim2.new(1, -20, 1, -45)
-    content.Position = UDim2.new(0, 10, 0, 40)
-    content.BackgroundTransparency = 1
-    content.Parent = mainFrame
+    -- Content Container
+    local contentContainer = Instance.new("Frame")
+    contentContainer.Name = "ContentContainer"
+    contentContainer.Size = UDim2.new(1, -20, 1, -45)
+    contentContainer.Position = UDim2.new(0, 10, 0, 40)
+    contentContainer.BackgroundTransparency = 1
+    contentContainer.Parent = mainFrame
 
-    local yPos = 0
+    -- Left Menu (Tab Buttons)
+    local leftMenu = Instance.new("Frame")
+    leftMenu.Name = "LeftMenu"
+    leftMenu.Size = UDim2.new(0, 110, 1, 0)
+    leftMenu.Position = UDim2.new(0, 0, 0, 0)
+    leftMenu.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+    leftMenu.BorderSizePixel = 0
+    leftMenu.Parent = contentContainer
 
-    -- Status Label
+    local lmCorner = Instance.new("UICorner")
+    lmCorner.CornerRadius = UDim.new(0, 8)
+    lmCorner.Parent = leftMenu
+
+    -- Tab Buttons
+    local function createTabBtn(text, icon, yPos, tabName)
+        local btn = Instance.new("TextButton")
+        btn.Name = tabName .. "Btn"
+        btn.Size = UDim2.new(1, -10, 0, 45)
+        btn.Position = UDim2.new(0, 5, 0, yPos)
+        btn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+        btn.Text = icon .. "\n" .. text
+        btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+        btn.TextSize = 11
+        btn.Font = Enum.Font.GothamSemibold
+        btn.Parent = leftMenu
+
+        local btnCorner = Instance.new("UICorner")
+        btnCorner.CornerRadius = UDim.new(0, 6)
+        btnCorner.Parent = btn
+
+        return btn
+    end
+
+    local teleportBtn = createTabBtn("Teleport", "🚀", 5, "teleport")
+    local playerBtn = createTabBtn("TP Player", "👥", 55, "player")
+
+    -- Right Content Frame
+    local rightContent = Instance.new("Frame")
+    rightContent.Name = "RightContent"
+    rightContent.Size = UDim2.new(1, -120, 1, 0)
+    rightContent.Position = UDim2.new(0, 115, 0, 0)
+    rightContent.BackgroundTransparency = 1
+    rightContent.Parent = contentContainer
+
+    -- Status Label (Always visible)
     local status = Instance.new("TextLabel")
     status.Name = "Status"
-    status.Size = UDim2.new(1, 0, 0, 40)
-    status.Position = UDim2.new(0, 0, 0, yPos)
+    status.Size = UDim2.new(1, 0, 0, 45)
+    status.Position = UDim2.new(0, 0, 0, 0)
     status.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-    status.Text = "⏸️ TIDAK AKTIF"
+    status.Text = "⏸️ TIDAK AKTIF\n⏰ 00:00:00"
     status.TextColor3 = Color3.fromRGB(255, 255, 255)
-    status.TextSize = 13
+    status.TextSize = 12
     status.Font = Enum.Font.GothamBold
-    status.Parent = content
+    status.Parent = rightContent
 
     local sCorner = Instance.new("UICorner")
     sCorner.CornerRadius = UDim.new(0, 6)
     sCorner.Parent = status
 
-    yPos = yPos + 50
+    -- Teleport Tab Content
+    local teleportTab = Instance.new("Frame")
+    teleportTab.Name = "TeleportTab"
+    teleportTab.Size = UDim2.new(1, 0, 1, -55)
+    teleportTab.Position = UDim2.new(0, 0, 0, 50)
+    teleportTab.BackgroundTransparency = 1
+    teleportTab.Visible = true
+    teleportTab.Parent = rightContent
+
+    local yPos = 0
 
     -- Helper function to create buttons
-    local function createBtn(text, callback, color, size)
+    local function createBtn(text, callback, color, size, parent)
         local b = Instance.new("TextButton")
         b.Size = size or UDim2.new(1, 0, 0, 35)
         b.BackgroundColor3 = color
         b.Text = text
         b.TextColor3 = Color3.fromRGB(255, 255, 255)
-        b.TextSize = 12
+        b.TextSize = 11
         b.Font = Enum.Font.GothamSemibold
-        b.Parent = content
+        b.Parent = parent
         
         local bc = Instance.new("UICorner")
         bc.CornerRadius = UDim.new(0, 6)
@@ -249,7 +301,7 @@ local function createGUI()
     end
 
     -- Copy Koordinat Button
-    local copyBtn = createBtn("📋 COPY KOORDINAT SEKARANG", function()
+    local copyBtn = createBtn("📋 COPY KOORDINAT", function()
         copiedCoord = getPos()
         if copiedCoord then
             notif("✅ Koordinat di-copy!")
@@ -261,12 +313,12 @@ local function createGUI()
         else
             notif("❌ Gagal copy posisi")
         end
-    end, Color3.fromRGB(70, 150, 230))
+    end, Color3.fromRGB(70, 150, 230), nil, teleportTab)
     copyBtn.Position = UDim2.new(0, 0, 0, yPos)
 
-    yPos = yPos + 45
+    yPos = yPos + 40
 
-    -- Set Home Button
+    -- Set Home & Tujuan Buttons
     local setHomeBtn = createBtn("🏠 SET HOME", function()
         if copiedCoord then
             homeCoord = copiedCoord
@@ -275,10 +327,9 @@ local function createGUI()
         else
             notif("❌ Copy koordinat dulu")
         end
-    end, Color3.fromRGB(70, 180, 100), UDim2.new(0.48, 0, 0, 35))
+    end, Color3.fromRGB(70, 180, 100), UDim2.new(0.48, 0, 0, 35), teleportTab)
     setHomeBtn.Position = UDim2.new(0, 0, 0, yPos)
 
-    -- Set Tujuan Button
     local setTujuanBtn = createBtn("🎯 SET TUJUAN", function()
         if copiedCoord then
             tujuanCoord = copiedCoord
@@ -287,22 +338,22 @@ local function createGUI()
         else
             notif("❌ Copy koordinat dulu")
         end
-    end, Color3.fromRGB(220, 100, 60), UDim2.new(0.48, 0, 0, 35))
+    end, Color3.fromRGB(220, 100, 60), UDim2.new(0.48, 0, 0, 35), teleportTab)
     setTujuanBtn.Position = UDim2.new(0.52, 0, 0, yPos)
 
     yPos = yPos + 45
 
     -- Info Label
     local info = Instance.new("TextLabel")
-    info.Size = UDim2.new(1, 0, 0, 90)
+    info.Size = UDim2.new(1, 0, 0, 85)
     info.Position = UDim2.new(0, 0, 0, yPos)
     info.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
     info.TextColor3 = Color3.fromRGB(200, 200, 200)
-    info.TextSize = 11
+    info.TextSize = 10
     info.Font = Enum.Font.Gotham
     info.TextXAlignment = Enum.TextXAlignment.Left
     info.TextYAlignment = Enum.TextYAlignment.Top
-    info.Parent = content
+    info.Parent = teleportTab
 
     local iCorner = Instance.new("UICorner")
     iCorner.CornerRadius = UDim.new(0, 6)
@@ -313,37 +364,37 @@ local function createGUI()
     iPad.PaddingTop = UDim.new(0, 8)
     iPad.Parent = info
 
-    info.Text = "⏰ Jadwal: 11:00, 13:00, 15:00, 17:00\n19:00, 21:00, 23:00, 01:00, 03:00\n05:00, 07:00, 09:00\n\n⏱️ Durasi: 30 menit\n🔄 Home → Tujuan → Home"
+    info.Text = "⏰ Jadwal:\n11:00, 13:00, 15:00, 17:00, 19:00\n21:00, 23:00, 01:00, 03:00, 05:00\n07:00, 09:00\n\n⏱️ Durasi: 30 menit | 🔄 Home→Tujuan→Home"
 
-    yPos = yPos + 100
+    yPos = yPos + 95
 
     -- Wait Time Label
     local waitLabel = Instance.new("TextLabel")
-    waitLabel.Size = UDim2.new(1, 0, 0, 25)
+    waitLabel.Size = UDim2.new(1, 0, 0, 22)
     waitLabel.Position = UDim2.new(0, 0, 0, yPos)
     waitLabel.BackgroundTransparency = 1
     waitLabel.Text = "⏱️ Waktu Tunggu: " .. fTime(waitTime)
     waitLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    waitLabel.TextSize = 12
+    waitLabel.TextSize = 11
     waitLabel.Font = Enum.Font.GothamBold
     waitLabel.TextXAlignment = Enum.TextXAlignment.Left
-    waitLabel.Parent = content
+    waitLabel.Parent = teleportTab
 
-    yPos = yPos + 30
+    yPos = yPos + 27
 
     -- Wait Time Input
     local waitInput = Instance.new("TextBox")
-    waitInput.Size = UDim2.new(0.65, 0, 0, 35)
+    waitInput.Size = UDim2.new(0.62, 0, 0, 35)
     waitInput.Position = UDim2.new(0, 0, 0, yPos)
     waitInput.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
     waitInput.PlaceholderText = "Menit"
     waitInput.Text = tostring(math.floor(waitTime/60))
     waitInput.TextColor3 = Color3.fromRGB(255, 255, 255)
     waitInput.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
-    waitInput.TextSize = 12
+    waitInput.TextSize = 11
     waitInput.Font = Enum.Font.Gotham
     waitInput.ClearTextOnFocus = false
-    waitInput.Parent = content
+    waitInput.Parent = teleportTab
 
     local wCorner = Instance.new("UICorner")
     wCorner.CornerRadius = UDim.new(0, 6)
@@ -360,8 +411,8 @@ local function createGUI()
         else
             notif("❌ Angka tidak valid")
         end
-    end, Color3.fromRGB(70, 180, 100), UDim2.new(0.33, 0, 0, 35))
-    setWaitBtn.Position = UDim2.new(0.67, 0, 0, yPos)
+    end, Color3.fromRGB(70, 180, 100), UDim2.new(0.36, 0, 0, 35), teleportTab)
+    setWaitBtn.Position = UDim2.new(0.64, 0, 0, yPos)
 
     yPos = yPos + 45
 
@@ -377,29 +428,34 @@ local function createGUI()
         if autoEnabled then
             startBtn.Text = "⏸️ STOP AUTO"
             startBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
-            status.Text = "▶️ AKTIF - Menunggu jadwal..."
             notif("✅ Auto AKTIF!")
         else
             startBtn.Text = "▶️ START AUTO"
             startBtn.BackgroundColor3 = Color3.fromRGB(70, 180, 100)
-            status.Text = "⏸️ TIDAK AKTIF"
             notif("⏸️ Auto BERHENTI")
         end
-    end, Color3.fromRGB(70, 180, 100))
+    end, Color3.fromRGB(70, 180, 100), UDim2.new(1, 0, 0, 42), teleportTab)
     startBtn.Position = UDim2.new(0, 0, 0, yPos)
 
-    yPos = yPos + 45
+    -- Player Tab Content
+    local playerTab = Instance.new("Frame")
+    playerTab.Name = "PlayerTab"
+    playerTab.Size = UDim2.new(1, 0, 1, -55)
+    playerTab.Position = UDim2.new(0, 0, 0, 50)
+    playerTab.BackgroundTransparency = 1
+    playerTab.Visible = false
+    playerTab.Parent = rightContent
 
     -- Player List Frame
     local playerFrame = Instance.new("ScrollingFrame")
-    playerFrame.Size = UDim2.new(1, 0, 0, 80)
-    playerFrame.Position = UDim2.new(0, 0, 0, yPos)
+    playerFrame.Size = UDim2.new(1, 0, 1, -45)
+    playerFrame.Position = UDim2.new(0, 0, 0, 0)
     playerFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
     playerFrame.BorderSizePixel = 0
     playerFrame.ScrollBarThickness = 4
     playerFrame.ScrollBarImageColor3 = Color3.fromRGB(200, 50, 50)
     playerFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-    playerFrame.Parent = content
+    playerFrame.Parent = playerTab
 
     local pCorner = Instance.new("UICorner")
     pCorner.CornerRadius = UDim.new(0, 6)
@@ -421,7 +477,7 @@ local function createGUI()
             none.Size = UDim2.new(1, -10, 0, 30)
             none.Position = UDim2.new(0, 5, 0, 5)
             none.BackgroundTransparency = 1
-            none.Text = "Tidak ada player"
+            none.Text = "Tidak ada player lain"
             none.TextColor3 = Color3.fromRGB(150, 150, 150)
             none.TextSize = 11
             none.Font = Enum.Font.Gotham
@@ -429,7 +485,7 @@ local function createGUI()
         else
             for _, name in ipairs(players) do
                 local pb = Instance.new("TextButton")
-                pb.Size = UDim2.new(1, -10, 0, 28)
+                pb.Size = UDim2.new(1, -10, 0, 32)
                 pb.Position = UDim2.new(0, 5, 0, py)
                 pb.BackgroundColor3 = Color3.fromRGB(70, 130, 220)
                 pb.Text = "👤 " .. name
@@ -450,23 +506,59 @@ local function createGUI()
                     end
                 end)
 
-                py = py + 33
+                py = py + 37
             end
         end
 
         playerFrame.CanvasSize = UDim2.new(0, 0, 0, py + 5)
     end
 
-    yPos = yPos + 90
-
     -- Refresh Player Button
-    local refreshBtn = createBtn("🔄 REFRESH PLAYER", function()
+    local refreshBtn = createBtn("🔄 REFRESH PLAYER LIST", function()
         updatePlayers()
         notif("✅ List di-refresh")
-    end, Color3.fromRGB(150, 100, 220))
-    refreshBtn.Position = UDim2.new(0, 0, 0, yPos)
+    end, Color3.fromRGB(150, 100, 220), UDim2.new(1, 0, 0, 38), playerTab)
+    refreshBtn.Position = UDim2.new(0, 0, 1, -38)
 
     updatePlayers()
+
+    -- Tab Switching Logic
+    local function switchTab(tabName)
+        currentTab = tabName
+        
+        -- Hide all tabs
+        teleportTab.Visible = false
+        playerTab.Visible = false
+        
+        -- Reset button colors
+        teleportBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+        playerBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+        teleportBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+        playerBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+        
+        -- Show selected tab
+        if tabName == "teleport" then
+            teleportTab.Visible = true
+            teleportBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+            teleportBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        elseif tabName == "player" then
+            playerTab.Visible = true
+            playerBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+            playerBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            updatePlayers()
+        end
+    end
+
+    teleportBtn.MouseButton1Click:Connect(function()
+        switchTab("teleport")
+    end)
+
+    playerBtn.MouseButton1Click:Connect(function()
+        switchTab("player")
+    end)
+
+    -- Initialize first tab
+    switchTab("teleport")
 
     -- Menu Button (for minimize)
     local menuBtn = Instance.new("TextButton")
@@ -553,6 +645,25 @@ end
 -- Auto Teleport Logic
 local statusLabel = createGUI()
 
+-- Update Time with Seconds
+task.spawn(function()
+    while task.wait(1) do
+        if statusLabel then
+            local timeStr = os.date("%H:%M:%S")
+            if autoEnabled then
+                if isRunning then
+                    -- Status will be updated by main logic
+                else
+                    statusLabel.Text = "▶️ AKTIF - Menunggu jadwal\n⏰ " .. timeStr
+                end
+            else
+                statusLabel.Text = "⏸️ TIDAK AKTIF\n⏰ " .. timeStr
+            end
+        end
+    end
+end)
+
+-- Main Auto Logic
 task.spawn(function()
     local lastCheck = ""
     
@@ -566,7 +677,7 @@ task.spawn(function()
                     isRunning = true
                     
                     if homeCoord and tujuanCoord then
-                        statusLabel.Text = "▶️ TP ke TUJUAN..."
+                        statusLabel.Text = "▶️ TP ke TUJUAN...\n⏰ " .. os.date("%H:%M:%S")
                         notif("🎄 TP ke Christmas Cave!")
                         
                         if tp(tujuanCoord.x, tujuanCoord.y, tujuanCoord.z) then
@@ -580,7 +691,7 @@ task.spawn(function()
                             end
                             
                             if autoEnabled then
-                                statusLabel.Text = "▶️ KEMBALI ke HOME..."
+                                statusLabel.Text = "▶️ KEMBALI ke HOME...\n⏰ " .. os.date("%H:%M:%S")
                                 notif("🏠 Kembali ke Home!")
                                 
                                 tp(homeCoord.x, homeCoord.y, homeCoord.z)
@@ -592,17 +703,9 @@ task.spawn(function()
                     end
                     
                     isRunning = false
-                    if autoEnabled then
-                        statusLabel.Text = "▶️ AKTIF - Menunggu jadwal..."
-                    end
-                    
                     task.wait(61)
                 end
             end
-        end
-        
-        if autoEnabled and not isRunning then
-            statusLabel.Text = "▶️ AKTIF\n⏰ " .. os.date("%H:%M")
         end
     end
 end)
