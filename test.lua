@@ -103,7 +103,9 @@ end
 
 -- Format Time
 local function fTime(sec)
-    return string.format("%02d:%02d", math.floor(sec/60), sec%60)
+    local m = math.floor(sec/60)
+    local s = sec%60
+    return string.format("%02d:%02d", m, s)
 end
 
 -- Parse Coordinates
@@ -138,8 +140,8 @@ local function createGUI()
     -- Main Frame
     mainFrame = Instance.new("Frame")
     mainFrame.Name = "MainFrame"
-    mainFrame.Size = UDim2.new(0, 450, 0, 480)
-    mainFrame.Position = UDim2.new(0.5, -225, 0.5, -240)
+    mainFrame.Size = UDim2.new(0, 450, 0, 520)
+    mainFrame.Position = UDim2.new(0.5, -225, 0.5, -260)
     mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
     mainFrame.BorderSizePixel = 0
     mainFrame.Active = true
@@ -330,7 +332,7 @@ local function createGUI()
 
     -- Home Input
     local homeInput = Instance.new("TextBox")
-    homeInput.Size = UDim2.new(0.48, 0, 0, 35)
+    homeInput.Size = UDim2.new(1, 0, 0, 35)
     homeInput.Position = UDim2.new(0, 0, 0, yPos)
     homeInput.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
     homeInput.PlaceholderText = "Paste koordinat Home (x,y,z)"
@@ -358,10 +360,28 @@ local function createGUI()
         end
     end)
 
+    yPos = yPos + 40
+
+    -- Test Home Button
+    local testHomeBtn = createBtn("🧪 TEST HOME", function()
+        if homeCoord then
+            if tp(homeCoord.x, homeCoord.y, homeCoord.z) then
+                notif("✅ TP ke Home berhasil!")
+            else
+                notif("❌ Gagal TP ke Home")
+            end
+        else
+            notif("❌ Set koordinat Home dulu!")
+        end
+    end, Color3.fromRGB(100, 150, 200), nil, teleportTab)
+    testHomeBtn.Position = UDim2.new(0, 0, 0, yPos)
+
+    yPos = yPos + 40
+
     -- Tujuan Input
     local tujuanInput = Instance.new("TextBox")
-    tujuanInput.Size = UDim2.new(0.48, 0, 0, 35)
-    tujuanInput.Position = UDim2.new(0.52, 0, 0, yPos)
+    tujuanInput.Size = UDim2.new(1, 0, 0, 35)
+    tujuanInput.Position = UDim2.new(0, 0, 0, yPos)
     tujuanInput.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
     tujuanInput.PlaceholderText = "Paste koordinat Tujuan (x,y,z)"
     tujuanInput.Text = tujuanCoord and string.format("%d,%d,%d", tujuanCoord.x, tujuanCoord.y, tujuanCoord.z) or ""
@@ -388,8 +408,23 @@ local function createGUI()
         end
     end)
 
-    yPos = yPos + 45
+    yPos = yPos + 40
 
+    -- Test Tujuan Button
+    local testTujuanBtn = createBtn("🧪 TEST TUJUAN", function()
+        if tujuanCoord then
+            if tp(tujuanCoord.x, tujuanCoord.y, tujuanCoord.z) then
+                notif("✅ TP ke Tujuan berhasil!")
+            else
+                notif("❌ Gagal TP ke Tujuan")
+            end
+        else
+            notif("❌ Set koordinat Tujuan dulu!")
+        end
+    end, Color3.fromRGB(200, 120, 80), nil, teleportTab)
+    testTujuanBtn.Position = UDim2.new(0, 0, 0, yPos)
+
+    yPos = yPos + 45
     -- Info Label
     local info = Instance.new("TextLabel")
     info.Size = UDim2.new(1, 0, 0, 85)
@@ -429,34 +464,54 @@ local function createGUI()
 
     yPos = yPos + 27
 
-    -- Wait Time Input
-    local waitInput = Instance.new("TextBox")
-    waitInput.Size = UDim2.new(0.62, 0, 0, 35)
-    waitInput.Position = UDim2.new(0, 0, 0, yPos)
-    waitInput.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-    waitInput.PlaceholderText = "Menit"
-    waitInput.Text = tostring(math.floor(waitTime/60))
-    waitInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-    waitInput.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
-    waitInput.TextSize = 11
-    waitInput.Font = Enum.Font.Gotham
-    waitInput.ClearTextOnFocus = false
-    waitInput.Parent = teleportTab
+    -- Wait Time Input (Menit)
+    local waitInputMin = Instance.new("TextBox")
+    waitInputMin.Size = UDim2.new(0.3, 0, 0, 35)
+    waitInputMin.Position = UDim2.new(0, 0, 0, yPos)
+    waitInputMin.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    waitInputMin.PlaceholderText = "Menit"
+    waitInputMin.Text = tostring(math.floor(waitTime/60))
+    waitInputMin.TextColor3 = Color3.fromRGB(255, 255, 255)
+    waitInputMin.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+    waitInputMin.TextSize = 11
+    waitInputMin.Font = Enum.Font.Gotham
+    waitInputMin.ClearTextOnFocus = false
+    waitInputMin.Parent = teleportTab
 
-    local wCorner = Instance.new("UICorner")
-    wCorner.CornerRadius = UDim.new(0, 6)
-    wCorner.Parent = waitInput
+    local wCornerMin = Instance.new("UICorner")
+    wCornerMin.CornerRadius = UDim.new(0, 6)
+    wCornerMin.Parent = waitInputMin
+
+    -- Wait Time Input (Detik)
+    local waitInputSec = Instance.new("TextBox")
+    waitInputSec.Size = UDim2.new(0.3, 0, 0, 35)
+    waitInputSec.Position = UDim2.new(0.32, 0, 0, yPos)
+    waitInputSec.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    waitInputSec.PlaceholderText = "Detik"
+    waitInputSec.Text = tostring(waitTime%60)
+    waitInputSec.TextColor3 = Color3.fromRGB(255, 255, 255)
+    waitInputSec.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+    waitInputSec.TextSize = 11
+    waitInputSec.Font = Enum.Font.Gotham
+    waitInputSec.ClearTextOnFocus = false
+    waitInputSec.Parent = teleportTab
+
+    local wCornerSec = Instance.new("UICorner")
+    wCornerSec.CornerRadius = UDim.new(0, 6)
+    wCornerSec.Parent = waitInputSec
 
     -- Set Wait Button
     local setWaitBtn = createBtn("✅ SET", function()
-        local m = tonumber(waitInput.Text)
-        if m and m > 0 then
-            waitTime = m * 60
+        local m = tonumber(waitInputMin.Text) or 0
+        local s = tonumber(waitInputSec.Text) or 0
+        
+        if m >= 0 and s >= 0 and s < 60 and (m > 0 or s > 0) then
+            waitTime = (m * 60) + s
             waitLabel.Text = "⏱️ Waktu Tunggu: " .. fTime(waitTime)
-            notif("✅ Diset: " .. m .. " menit")
+            notif("✅ Diset: " .. m .. "m " .. s .. "s")
             saveConfig()
         else
-            notif("❌ Angka tidak valid")
+            notif("❌ Angka tidak valid!")
         end
     end, Color3.fromRGB(70, 180, 100), UDim2.new(0.36, 0, 0, 35), teleportTab)
     setWaitBtn.Position = UDim2.new(0.64, 0, 0, yPos)
@@ -497,6 +552,7 @@ local function createGUI()
     playerTab.BackgroundTransparency = 1
     playerTab.Visible = false
     playerTab.Parent = rightContent
+
     -- Player List Frame
     local playerFrame = Instance.new("ScrollingFrame")
     playerFrame.Size = UDim2.new(1, 0, 1, -45)
