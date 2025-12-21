@@ -1,341 +1,166 @@
--- Auto Teleport Script untuk Christmas Cave
--- Support Android & Delta Executor
--- Optimized untuk Mobile
+-- Auto Teleport Schedule Script
+-- Compatible with Delta Executor (Android/PC)
 
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"))()
-local Window = Library.CreateLib("Auto Teleport", "DarkTheme")
-
--- Services
-local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
-local HttpService = game:GetService("HttpService")
-local RunService = game:GetService("RunService")
+local Window = Library.CreateLib("Auto Teleport Schedule", "DarkTheme")
 
 -- Variables
-local LocalPlayer = Players.LocalPlayer
-local ConfigFile = "AutoTeleportConfig.json"
+local Player = game.Players.LocalPlayer
+local Character = Player.Character or Player.CharacterAdded:Wait()
+local HRP = Character:WaitForChild("HumanoidRootPart")
 
--- Default Config
 local Config = {
-    enabled = false,
-    startCoords = nil,
-    targetCoords = nil,
-    waitTime = 35 * 60,
-    schedule = {
-        ["11:01"] = true,
-        ["13:00"] = true,
-        ["15:00"] = true,
-        ["17:00"] = true,
-        ["19:00"] = true,
-        ["21:00"] = true,
-        ["23:00"] = true,
-        ["01:00"] = true,
-        ["03:00"] = true,
-        ["05:00"] = true,
-        ["07:00"] = true,
-        ["09:00"] = true,
-    },
-    floatingButtonPos = {X = 0.85, Y = 0.05}
+    Enabled = false,
+    TargetCoords = nil,
+    SpawnCoords = nil,
+    WaitTime = 35, -- Default 35 menit
+    ScheduleEnabled = false,
+    CurrentScheduleIndex = 1,
+    TeleportToPlayer = false,
+    SelectedPlayer = nil
 }
 
--- Create Floating Button (Touch-friendly untuk Android)
-local ScreenGui = Instance.new("ScreenGui")
-local FloatingButton = Instance.new("TextButton")
-local UICorner = Instance.new("UICorner")
-local UIStroke = Instance.new("UIStroke")
+-- Schedule times (in 24-hour format)
+local ScheduleTimes = {
+    {hour = 11, minute = 0},
+    {hour = 13, minute = 0},
+    {hour = 15, minute = 0},
+    {hour = 17, minute = 0},
+    {hour = 19, minute = 0},
+    {hour = 21, minute = 0},
+    {hour = 23, minute = 0},
+    {hour = 1, minute = 0},
+    {hour = 3, minute = 0},
+    {hour = 5, minute = 0},
+    {hour = 7, minute = 0},
+    {hour = 9, minute = 0}
+}
 
-ScreenGui.Name = "FloatingMenu"
-ScreenGui.Parent = game:GetService("CoreGui")
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-ScreenGui.ResetOnSpawn = false
-ScreenGui.DisplayOrder = 999
-
-FloatingButton.Name = "FloatingButton"
-FloatingButton.Parent = ScreenGui
-FloatingButton.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-FloatingButton.Position = UDim2.new(Config.floatingButtonPos.X, 0, Config.floatingButtonPos.Y, 0)
-FloatingButton.Size = UDim2.new(0, 100, 0, 50) -- Lebih besar untuk Android
-FloatingButton.Font = Enum.Font.GothamBold
-FloatingButton.Text = "⚙️\nMENU"
-FloatingButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-FloatingButton.TextSize = 14
-FloatingButton.AutoButtonColor = false
-FloatingButton.ZIndex = 999
-
-UICorner.CornerRadius = UDim.new(0, 12)
-UICorner.Parent = FloatingButton
-
-UIStroke.Color = Color3.fromRGB(100, 100, 255)
-UIStroke.Thickness = 2.5
-UIStroke.Parent = FloatingButton
-
--- Dragging System untuk Touch (Android)
-local dragging = false
-local dragInput
-local dragStart
-local startPos
-
-local function update(input)
-    local delta = input.Position - dragStart
-    FloatingButton.Position = UDim2.new(
-        startPos.X.Scale,
-        startPos.X.Offset + delta.X,
-        startPos.Y.Scale,
-        startPos.Y.Offset + delta.Y
-    )
-    
-    -- Save position
-    Config.floatingButtonPos.X = FloatingButton.Position.X.Scale
-    Config.floatingButtonPos.Y = FloatingButton.Position.Y.Scale
-    SaveConfig()
-end
-
-FloatingButton.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        startPos = FloatingButton.Position
-        
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
-            end
-        end)
-    end
-end)
-
-FloatingButton.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-        dragInput = input
-    end
-end)
-
-RunService.RenderStepped:Connect(function()
-    if dragging and dragInput then
-        update(dragInput)
-    end
-end)
-
--- GUI Visibility Toggle
-local isMinimized = true
-local MainUIObject = nil
-
--- Wait for MainUI to load
-task.wait(1)
-for _, v in pairs(game:GetService("CoreGui"):GetChildren()) do
-    if v.Name == "MainUI" or v:FindFirstChild("Main") then
-        MainUIObject = v
-        break
-    end
-end
-
-FloatingButton.MouseButton1Click:Connect(function()
-    isMinimized = not isMinimized
-    if MainUIObject then
-        MainUIObject.Enabled = not isMinimized
-        if isMinimized then
-            FloatingButton.Text = "⚙️\nMENU"
-            FloatingButton.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-            UIStroke.Color = Color3.fromRGB(100, 100, 255)
-        else
-            FloatingButton.Text = "❌\nCLOSE"
-            FloatingButton.BackgroundColor3 = Color3.fromRGB(45, 35, 35)
-            UIStroke.Color = Color3.fromRGB(255, 100, 100)
-        end
-    end
-end)
-
--- Load Config
-local function LoadConfig()
-    local success, data = pcall(function()
-        return readfile(ConfigFile)
+-- Functions
+local function SaveConfig()
+    local success, err = pcall(function()
+        writefile("AutoTeleportConfig.json", game:GetService("HttpService"):JSONEncode(Config))
     end)
-    if success and data then
-        local decoded = HttpService:JSONDecode(data)
-        for k, v in pairs(decoded) do
-            Config[k] = v
+    if success then
+        Library:Notify("Config", "Config berhasil disimpan!", 3)
+    end
+end
+
+local function LoadConfig()
+    if isfile("AutoTeleportConfig.json") then
+        local success, data = pcall(function()
+            return game:GetService("HttpService"):JSONDecode(readfile("AutoTeleportConfig.json"))
+        end)
+        if success and data then
+            Config = data
+            Library:Notify("Config", "Config berhasil dimuat!", 3)
+            return true
         end
-        print("✅ Config loaded!")
-        return true
     end
     return false
 end
 
--- Save Config
-local function SaveConfig()
-    pcall(function()
-        local encoded = HttpService:JSONEncode(Config)
-        writefile(ConfigFile, encoded)
-    end)
-end
-
--- Teleport Function (Fixed untuk Android)
 local function TeleportTo(position)
-    local character = LocalPlayer.Character
-    if not character then return false end
-    
-    local hrp = character:FindFirstChild("HumanoidRootPart")
-    if not hrp then return false end
-    
-    -- Disable collision sementara
-    for _, part in pairs(character:GetDescendants()) do
-        if part:IsA("BasePart") then
-            part.CanCollide = false
-        end
+    if Character and HRP then
+        HRP.CFrame = CFrame.new(position)
     end
-    
-    hrp.CFrame = CFrame.new(position)
-    task.wait(0.1)
-    
-    -- Re-enable collision
-    for _, part in pairs(character:GetDescendants()) do
-        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-            part.CanCollide = true
-        end
-    end
-    
-    return true
 end
 
--- Smooth Teleport
-local function SmoothTeleport(position)
-    local character = LocalPlayer.Character
-    if not character then return false end
-    
-    local hrp = character:FindFirstChild("HumanoidRootPart")
-    if not hrp then return false end
-    
-    local tweenInfo = TweenInfo.new(
-        1.5,
-        Enum.EasingStyle.Quad,
-        Enum.EasingDirection.InOut
-    )
-    
-    local tween = TweenService:Create(hrp, tweenInfo, {CFrame = CFrame.new(position)})
-    tween:Play()
-    tween.Completed:Wait()
-    
-    return true
-end
-
--- Get Current Time
 local function GetCurrentTime()
     local time = os.date("*t")
-    return string.format("%02d:%02d", time.hour, time.min)
+    return {hour = time.hour, minute = time.min}
+end
+
+local function ShouldTeleport()
+    if not Config.ScheduleEnabled then return false end
+    
+    local currentTime = GetCurrentTime()
+    for _, scheduleTime in ipairs(ScheduleTimes) do
+        if currentTime.hour == scheduleTime.hour and currentTime.minute == scheduleTime.minute then
+            return true
+        end
+    end
+    return false
+end
+
+local function GetPlayerList()
+    local players = {}
+    for _, player in ipairs(game.Players:GetPlayers()) do
+        if player ~= Player then
+            table.insert(players, player.Name)
+        end
+    end
+    return players
 end
 
 -- Main Tab
 local MainTab = Window:NewTab("Main")
-local MainSection = MainTab:NewSection("Auto Teleport")
+local MainSection = MainTab:NewSection("Koordinat Setup")
 
--- Status Label
-local StatusLabel = MainSection:NewLabel("Status: Idle")
-
--- Info
-local InfoSection = MainTab:NewSection("Info")
-InfoSection:NewLabel("Tap floating button untuk hide/show")
-InfoSection:NewLabel("Hold & drag untuk pindahkan button")
-
--- Toggle Auto Teleport
-MainSection:NewToggle("Enable Auto Teleport", "Aktifkan auto teleport", function(state)
-    Config.enabled = state
+MainSection:NewButton("Copy Koordinat Sekarang", "Simpan posisi saat ini", function()
+    Config.SpawnCoords = HRP.Position
+    Library:Notify("Koordinat", "Posisi spawn disimpan: " .. tostring(Config.SpawnCoords), 3)
     SaveConfig()
-    StatusLabel:UpdateLabel(state and "Status: Running" or "Status: Stopped")
 end)
 
--- Save Positions
-MainSection:NewButton("📍 Save Start Position", "Simpan posisi awal", function()
-    local char = LocalPlayer.Character
-    if char and char:FindFirstChild("HumanoidRootPart") then
-        local pos = char.HumanoidRootPart.Position
-        Config.startCoords = {X = pos.X, Y = pos.Y, Z = pos.Z}
+MainSection:NewTextBox("Paste Koordinat Target (X,Y,Z)", "Format: 100,50,200", function(txt)
+    local coords = string.split(txt, ",")
+    if #coords == 3 then
+        Config.TargetCoords = Vector3.new(tonumber(coords[1]), tonumber(coords[2]), tonumber(coords[3]))
+        Library:Notify("Koordinat", "Target koordinat diset: " .. tostring(Config.TargetCoords), 3)
         SaveConfig()
-        StatusLabel:UpdateLabel("✅ Start Position Saved!")
-        task.wait(2)
-        StatusLabel:UpdateLabel("Status: " .. (Config.enabled and "Running" or "Idle"))
     else
-        StatusLabel:UpdateLabel("❌ Character not found!")
-        task.wait(2)
-        StatusLabel:UpdateLabel("Status: Idle")
+        Library:Notify("Error", "Format salah! Gunakan: X,Y,Z", 3)
     end
 end)
 
-MainSection:NewButton("🎯 Save Target Position", "Simpan posisi tujuan", function()
-    local char = LocalPlayer.Character
-    if char and char:FindFirstChild("HumanoidRootPart") then
-        local pos = char.HumanoidRootPart.Position
-        Config.targetCoords = {X = pos.X, Y = pos.Y, Z = pos.Z}
-        SaveConfig()
-        StatusLabel:UpdateLabel("✅ Target Position Saved!")
-        task.wait(2)
-        StatusLabel:UpdateLabel("Status: " .. (Config.enabled and "Running" or "Idle"))
-    else
-        StatusLabel:UpdateLabel("❌ Character not found!")
-        task.wait(2)
-        StatusLabel:UpdateLabel("Status: Idle")
-    end
+MainSection:NewSlider("Waktu Tunggu (Menit)", "Durasi di lokasi target", 60, 1, function(s)
+    Config.WaitTime = s
+    SaveConfig()
 end)
 
--- Wait Time Slider
-MainSection:NewSlider("Wait Time (Minutes)", "Waktu tunggu", 60, 1, function(value)
-    Config.waitTime = value * 60
+MainSection:NewToggle("Enable Auto Teleport Schedule", "Aktifkan teleport otomatis", function(state)
+    Config.ScheduleEnabled = state
     SaveConfig()
+    if state then
+        Library:Notify("Schedule", "Auto teleport schedule AKTIF!", 3)
+    else
+        Library:Notify("Schedule", "Auto teleport schedule NONAKTIF!", 3)
+    end
 end)
 
 -- Player Teleport Tab
-local PlayerTab = Window:NewTab("Players")
+local PlayerTab = Window:NewTab("Player Teleport")
 local PlayerSection = PlayerTab:NewSection("Teleport ke Player")
 
-local PlayerList = {}
-local SelectedPlayer = nil
+local playerDropdown
+local playerList = GetPlayerList()
 
--- Refresh Player List
-local function RefreshPlayers()
-    PlayerList = {}
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer then
-            table.insert(PlayerList, player.Name)
-        end
+PlayerSection:NewButton("Refresh Player List", "Update daftar player", function()
+    playerList = GetPlayerList()
+    Library:Notify("Player List", "Daftar player di-refresh!", 2)
+    -- Recreate dropdown with new list
+    if playerDropdown then
+        playerDropdown:Refresh(playerList)
     end
-    return PlayerList
-end
-
--- Refresh Button
-PlayerSection:NewButton("🔄 Refresh List", "Update daftar player", function()
-    local players = RefreshPlayers()
-    StatusLabel:UpdateLabel("Found " .. #players .. " players")
-    task.wait(1.5)
-    StatusLabel:UpdateLabel("Status: " .. (Config.enabled and "Running" or "Idle"))
 end)
 
--- Player Dropdown
-PlayerSection:NewDropdown("Select Player", "Pilih player", RefreshPlayers(), function(selected)
-    SelectedPlayer = selected
+playerDropdown = PlayerSection:NewDropdown("Pilih Player", "Pilih player target", playerList, function(currentOption)
+    Config.SelectedPlayer = currentOption
+    SaveConfig()
 end)
 
--- Teleport to Player
-PlayerSection:NewButton("🚀 Teleport", "TP ke player", function()
-    if not SelectedPlayer then
-        StatusLabel:UpdateLabel("❌ Pilih player dulu!")
-        task.wait(2)
-        StatusLabel:UpdateLabel("Status: " .. (Config.enabled and "Running" or "Idle"))
-        return
-    end
-    
-    local player = Players:FindFirstChild(SelectedPlayer)
-    if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-        local pos = player.Character.HumanoidRootPart.Position
-        if TeleportTo(pos) then
-            StatusLabel:UpdateLabel("✅ TP to " .. SelectedPlayer)
+PlayerSection:NewButton("Teleport ke Player", "Teleport sekarang", function()
+    if Config.SelectedPlayer then
+        local targetPlayer = game.Players:FindFirstChild(Config.SelectedPlayer)
+        if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            TeleportTo(targetPlayer.Character.HumanoidRootPart.Position)
+            Library:Notify("Teleport", "Teleport ke " .. Config.SelectedPlayer, 3)
         else
-            StatusLabel:UpdateLabel("❌ TP Failed!")
+            Library:Notify("Error", "Player tidak ditemukan atau tidak ada character!", 3)
         end
-        task.wait(2)
-        StatusLabel:UpdateLabel("Status: " .. (Config.enabled and "Running" or "Idle"))
     else
-        StatusLabel:UpdateLabel("❌ Player not found!")
-        task.wait(2)
-        StatusLabel:UpdateLabel("Status: " .. (Config.enabled and "Running" or "Idle"))
+        Library:Notify("Error", "Pilih player terlebih dahulu!", 3)
     end
 end)
 
@@ -343,109 +168,65 @@ end)
 local ScheduleTab = Window:NewTab("Schedule")
 local ScheduleSection = ScheduleTab:NewSection("Jadwal Teleport")
 
-local times = {"11:00", "13:00", "15:00", "17:00", "19:00", "21:00", "23:00", "01:00", "03:00", "05:00", "07:00", "09:00"}
-
-for _, time in ipairs(times) do
-    ScheduleSection:NewToggle(time, "Aktifkan jam " .. time, function(state)
-        Config.schedule[time] = state
-        SaveConfig()
-    end)
+ScheduleSection:NewLabel("Jadwal Jam Teleport:")
+for _, time in ipairs(ScheduleTimes) do
+    ScheduleSection:NewLabel(string.format("%02d:%02d", time.hour, time.minute))
 end
 
 -- Info Tab
 local InfoTab = Window:NewTab("Info")
-local InfoTabSection = InfoTab:NewSection("Cara Pakai")
-InfoTabSection:NewLabel("1. Pergi ke posisi awal (Fish Island)")
-InfoTabSection:NewLabel("2. Klik 'Save Start Position'")
-InfoTabSection:NewLabel("3. Pergi ke posisi tujuan (Store)")
-InfoTabSection:NewLabel("4. Klik 'Save Target Position'")
-InfoTabSection:NewLabel("5. Atur jadwal di tab Schedule")
-InfoTabSection:NewLabel("6. Enable Auto Teleport")
-InfoTabSection:NewLabel("")
-InfoTabSection:NewLabel("Script akan auto TP sesuai jadwal!")
+local InfoSection = InfoTab:NewSection("Status")
 
--- Load Config on Start
+InfoSection:NewLabel("Status: Menunggu...")
+InfoSection:NewLabel("Spawn Pos: Belum diset")
+InfoSection:NewLabel("Target Pos: Belum diset")
+InfoSection:NewLabel("Waktu Tunggu: 35 menit")
+
+-- Load saved config
 LoadConfig()
 
--- Restore floating button position
-if Config.floatingButtonPos then
-    FloatingButton.Position = UDim2.new(Config.floatingButtonPos.X, 0, Config.floatingButtonPos.Y, 0)
-end
-
--- Main Loop (Optimized)
-local lastTeleportTime = 0
-local isAtTarget = false
-local hasExecutedThisHour = false
-local lastCheckedHour = ""
-
-task.spawn(function()
-    while task.wait(1) do
-        if not Config.enabled or not Config.startCoords or not Config.targetCoords then
-            continue
-        end
-        
-        local currentTime = tick()
-        local currentHour = GetCurrentTime()
-        
-        -- Reset execution flag saat jam berganti
-        if currentHour ~= lastCheckedHour then
-            hasExecutedThisHour = false
-            lastCheckedHour = currentHour
-        end
-        
-        local shouldTeleport = Config.schedule[currentHour:sub(1, 5)] == true
-        
-        -- Teleport ke target (hanya sekali per jam)
-        if shouldTeleport and not isAtTarget and not hasExecutedThisHour then
-            StatusLabel:UpdateLabel("🚀 Teleporting to target...")
-            local targetPos = Vector3.new(Config.targetCoords.X, Config.targetCoords.Y, Config.targetCoords.Z)
+-- Main Loop
+spawn(function()
+    local lastTeleport = 0
+    local isAtTarget = false
+    
+    while wait(1) do
+        if Config.ScheduleEnabled and Config.TargetCoords and Config.SpawnCoords then
+            local currentTime = os.time()
             
-            if SmoothTeleport(targetPos) then
-                isAtTarget = true
-                hasExecutedThisHour = true
-                lastTeleportTime = currentTime
-                StatusLabel:UpdateLabel("✅ At target. Waiting " .. math.floor(Config.waitTime/60) .. " min")
-            else
-                StatusLabel:UpdateLabel("❌ Teleport failed!")
-            end
-        end
-        
-        -- Teleport kembali ke start
-        if isAtTarget and (currentTime - lastTeleportTime) >= Config.waitTime then
-            StatusLabel:UpdateLabel("🏠 Returning to start...")
-            local startPos = Vector3.new(Config.startCoords.X, Config.startCoords.Y, Config.startCoords.Z)
-            
-            if SmoothTeleport(startPos) then
-                isAtTarget = false
-                lastTeleportTime = currentTime
-                StatusLabel:UpdateLabel("✅ Back at start!")
-                task.wait(2)
-                StatusLabel:UpdateLabel("Status: Waiting for schedule...")
-            else
-                StatusLabel:UpdateLabel("❌ Return failed!")
-            end
-        end
-        
-        -- Update countdown
-        if isAtTarget then
-            local timeLeft = Config.waitTime - (currentTime - lastTeleportTime)
-            if timeLeft > 0 then
-                local minutes = math.floor(timeLeft / 60)
-                local seconds = math.floor(timeLeft % 60)
-                StatusLabel:UpdateLabel(string.format("⏱️ %02d:%02d", minutes, seconds))
+            if ShouldTeleport() and (currentTime - lastTeleport) > 60 then
+                if not isAtTarget then
+                    -- Teleport to target
+                    TeleportTo(Config.TargetCoords)
+                    Library:Notify("Teleport", "Teleport ke target lokasi!", 3)
+                    isAtTarget = true
+                    lastTeleport = currentTime
+                    
+                    -- Wait and teleport back
+                    wait(Config.WaitTime * 60) -- Convert to seconds
+                    TeleportTo(Config.SpawnCoords)
+                    Library:Notify("Teleport", "Kembali ke spawn lokasi!", 3)
+                    isAtTarget = false
+                end
             end
         end
     end
 end)
 
--- Start minimized
-task.wait(1.5)
-if MainUIObject then
-    MainUIObject.Enabled = false
-    isMinimized = true
+-- Update Character reference
+Player.CharacterAdded:Connect(function(char)
+    Character = char
+    HRP = char:WaitForChild("HumanoidRootPart")
+end)
+
+-- Cleanup on exit
+local ScreenGui = Player.PlayerGui:FindFirstChild("Kavo UI Library")
+if ScreenGui then
+    ScreenGui.Destroying:Connect(function()
+        Config.ScheduleEnabled = false
+        SaveConfig()
+        Library:Notify("Exit", "Script dihentikan dan config disimpan!", 3)
+    end)
 end
 
-print("✅ Auto Teleport Script Loaded!")
-print("📱 Optimized untuk Android")
-print("⚙️ Tap floating button untuk buka menu")
-print("👆 Hold & drag untuk pindahkan button")
+Library:Notify("Loaded", "Auto Teleport Schedule siap digunakan!", 5)
