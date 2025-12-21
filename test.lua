@@ -20,6 +20,7 @@ local homeCoord = nil
 local tujuanCoord = nil
 local currentTab = "teleport"
 local autoStartTime = 0
+local eventDuration = 30 * 60  -- Durasi event dalam detik
 
 -- Config
 local CONFIG = "XmasConfig.json"
@@ -30,6 +31,7 @@ local function loadConfig()
         if readfile and isfile and isfile(CONFIG) then
             local data = HttpService:JSONDecode(readfile(CONFIG))
             waitTime = data.waitTime or (30 * 60)
+            eventDuration = data.eventDuration or (30 * 60)
             homeCoord = data.home
             tujuanCoord = data.tujuan
         end
@@ -43,6 +45,7 @@ local function saveConfig()
         if writefile then
             writefile(CONFIG, HttpService:JSONEncode({
                 waitTime = waitTime,
+                eventDuration = eventDuration,
                 home = homeCoord,
                 tujuan = tujuanCoord
             }))
@@ -115,6 +118,39 @@ local function parseCoords(text)
         return {x = tonumber(x), y = tonumber(y), z = tonumber(z)}
     end
     return nil
+end
+
+-- Calculate time since event start
+local function getTimeSinceEventStart(eventTime)
+    local hour, minute = eventTime:match("(%d+):(%d+)")
+    if not hour or not minute then return nil end
+    
+    hour = tonumber(hour)
+    minute = tonumber(minute)
+    
+    local now = os.date("*t")
+    local nowSeconds = now.hour * 3600 + now.min * 60 + now.sec
+    local eventSeconds = hour * 3600 + minute * 60
+    
+    local elapsed = nowSeconds - eventSeconds
+    
+    -- Handle past midnight case
+    if elapsed < 0 then
+        elapsed = elapsed + (24 * 3600)
+    end
+    
+    return elapsed
+end
+
+-- Check if currently in event window
+local function isInEventWindow()
+    for _, time in ipairs(jadwal) do
+        local elapsed = getTimeSinceEventStart(time)
+        if elapsed and elapsed >= 0 and elapsed < eventDuration then
+            return true, eventDuration - elapsed
+        end
+    end
+    return false, 0
 end
 
 -- Create GUI
@@ -772,48 +808,47 @@ end)
 
 -- Main Auto Logic
 task.spawn(function()
-    local lastCheck = ""
-    
     while task.wait(1) do
         if autoEnabled and not isRunning then
-            local now = os.date("%H:%M")
+            -- Cek apakah sedang dalam window event
+            local inEvent, remainingTime = isInEventWindow()
             
-            for _, time in ipairs(jadwal) do
-                if now == time and now ~= lastCheck then
-                    lastCheck = now
-                    isRunning = true
-                    autoStartTime = tick()
+            if inEvent and remainingTime > 0 then
+                isRunning = true
+                autoStartTime = tick()
+                
+                if homeCoord and tujuanCoord then
+                    statusLabel.Text = "▶️ TP ke TUJUAN...\n⏰ " .. os.date("%H:%M:%S")
+                    notif("🎄 TP ke Christmas Cave! Sisa: " .. fTime(math.floor(remainingTime)))
                     
-                    if homeCoord and tujuanCoord then
-                        statusLabel.Text = "▶️ TP ke TUJUAN...\n⏰ " .. os.date("%H:%M:%S")
-                        notif("🎄 TP ke Christmas Cave!")
+                    if tp(tujuanCoord.x, tujuanCoord.y, tujuanCoord.z) then
+                        notif("✅ Sampai tujuan!")
                         
-                        if tp(tujuanCoord.x, tujuanCoord.y, tujuanCoord.z) then
-                            notif("✅ Sampai tujuan!")
-                            
-                            local endTime = tick() + waitTime
-                            while tick() < endTime and autoEnabled do
-                                local left = math.floor(endTime - tick())
-                                statusLabel.Text = "⏸️ MENUNGGU\n⏰ Sisa: " .. fTime(left)
-                                task.wait(1)
-                            end
-                            
-                            if autoEnabled then
-                                statusLabel.Text = "▶️ KEMBALI ke HOME...\n⏰ " .. os.date("%H:%M:%S")
-                                notif("🏠 Kembali ke Home!")
-                                
-                                tp(homeCoord.x, homeCoord.y, homeCoord.z)
-                                notif("✅ Sampai Home!")
-                            end
-                        else
-                            notif("❌ Gagal TP")
+                        -- Gunakan sisa waktu yang lebih kecil antara waitTime dan remainingTime
+                        local actualWaitTime = math.min(waitTime, remainingTime)
+                        local endTime = tick() + actualWaitTime
+                        
+                        while tick() < endTime and autoEnabled do
+                            local left = math.floor(endTime - tick())
+                            statusLabel.Text = "⏸️ MENUNGGU\n⏰ Sisa: " .. fTime(left)
+                            task.wait(1)
                         end
+                        
+                        if autoEnabled then
+                            statusLabel.Text = "▶️ KEMBALI ke HOME...\n⏰ " .. os.date("%H:%M:%S")
+                            notif("🏠 Kembali ke Home!")
+                            
+                            tp(homeCoord.x, homeCoord.y, homeCoord.z)
+                            notif("✅ Sampai Home!")
+                        end
+                    else
+                        notif("❌ Gagal TP")
                     end
-                    
-                    isRunning = false
-                    autoStartTime = 0
-                    task.wait(61)
                 end
+                
+                isRunning = false
+                autoStartTime = 0
+                task.wait(5)
             end
         elseif not autoEnabled and isRunning then
             -- Jika auto dicancel saat masih running, load sisa waktu
