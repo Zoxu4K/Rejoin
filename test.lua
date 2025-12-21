@@ -8,6 +8,7 @@ local Window = Library.CreateLib("Auto Teleport Script", "DarkTheme")
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
+local UserInputService = game:GetService("UserInputService")
 
 -- Variables
 local LocalPlayer = Players.LocalPlayer
@@ -34,6 +35,73 @@ local Config = {
         ["09:00"] = true,
     }
 }
+
+-- Create Floating Button
+local ScreenGui = Instance.new("ScreenGui")
+local FloatingButton = Instance.new("TextButton")
+local UICorner = Instance.new("UICorner")
+local UIStroke = Instance.new("UIStroke")
+
+ScreenGui.Name = "FloatingMenu"
+ScreenGui.Parent = game:GetService("CoreGui")
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.ResetOnSpawn = false
+
+FloatingButton.Name = "FloatingButton"
+FloatingButton.Parent = ScreenGui
+FloatingButton.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+FloatingButton.Position = UDim2.new(0.9, 0, 0.1, 0)
+FloatingButton.Size = UDim2.new(0, 120, 0, 45)
+FloatingButton.Font = Enum.Font.GothamBold
+FloatingButton.Text = "⚙️ MENU"
+FloatingButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+FloatingButton.TextSize = 16
+FloatingButton.Active = true
+FloatingButton.Draggable = true
+
+UICorner.CornerRadius = UDim.new(0, 10)
+UICorner.Parent = FloatingButton
+
+UIStroke.Color = Color3.fromRGB(100, 100, 255)
+UIStroke.Thickness = 2
+UIStroke.Parent = FloatingButton
+
+-- GUI Visibility Toggle
+local isMinimized = false
+local MainUIObject = nil
+
+-- Wait for MainUI to load
+spawn(function()
+    wait(0.5)
+    MainUIObject = game:GetService("CoreGui"):FindFirstChild("MainUI")
+end)
+
+FloatingButton.MouseButton1Click:Connect(function()
+    isMinimized = not isMinimized
+    if MainUIObject then
+        MainUIObject.Enabled = not isMinimized
+        if isMinimized then
+            FloatingButton.Text = "⚙️ MENU"
+            FloatingButton.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+        else
+            FloatingButton.Text = "❌ CLOSE"
+            FloatingButton.BackgroundColor3 = Color3.fromRGB(45, 35, 35)
+        end
+    end
+end)
+
+-- Hover Effect
+FloatingButton.MouseEnter:Connect(function()
+    FloatingButton.BackgroundColor3 = Color3.fromRGB(55, 55, 75)
+end)
+
+FloatingButton.MouseLeave:Connect(function()
+    if isMinimized then
+        FloatingButton.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+    else
+        FloatingButton.BackgroundColor3 = Color3.fromRGB(45, 35, 35)
+    end
+end)
 
 -- Load Config
 local function LoadConfig()
@@ -97,6 +165,11 @@ local MainSection = MainTab:NewSection("Auto Teleport Settings")
 
 -- Status Label
 local StatusLabel = MainSection:NewLabel("Status: Idle")
+
+-- GUI Controls Info
+local ControlSection = MainTab:NewSection("GUI Controls")
+ControlSection:NewLabel("Klik floating button ⚙️ MENU untuk hide/show")
+ControlSection:NewLabel("Floating button bisa di-drag ke mana saja")
 
 -- Toggle Auto Teleport
 MainSection:NewToggle("Enable Auto Teleport", "Aktifkan auto teleport", function(state)
@@ -249,5 +322,13 @@ spawn(function()
     end
 end)
 
+-- Start with GUI minimized
+wait(1)
+if MainUIObject then
+    MainUIObject.Enabled = false
+    isMinimized = true
+end
+
 print("Auto Teleport Script Loaded!")
-print("Buka GUI untuk mengatur koordinat dan jadwal")
+print("Klik floating button ⚙️ MENU untuk buka GUI")
+print("Floating button bisa di-drag kemana aja!")
