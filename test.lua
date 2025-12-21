@@ -19,6 +19,7 @@ local copiedCoord = nil
 local homeCoord = nil
 local tujuanCoord = nil
 local currentTab = "teleport"
+local autoStartTime = 0
 
 -- Config
 local CONFIG = "XmasConfig.json"
@@ -103,6 +104,15 @@ end
 -- Format Time
 local function fTime(sec)
     return string.format("%02d:%02d", math.floor(sec/60), sec%60)
+end
+
+-- Parse Coordinates
+local function parseCoords(text)
+    local x, y, z = text:match("^%s*(-?%d+)%s*,%s*(-?%d+)%s*,%s*(-?%d+)%s*$")
+    if x and y and z then
+        return {x = tonumber(x), y = tonumber(y), z = tonumber(z)}
+    end
+    return nil
 end
 
 -- Create GUI
@@ -318,28 +328,65 @@ local function createGUI()
 
     yPos = yPos + 40
 
-    -- Set Home & Tujuan Buttons
-    local setHomeBtn = createBtn("🏠 SET HOME", function()
-        if copiedCoord then
-            homeCoord = copiedCoord
+    -- Home Input
+    local homeInput = Instance.new("TextBox")
+    homeInput.Size = UDim2.new(0.48, 0, 0, 35)
+    homeInput.Position = UDim2.new(0, 0, 0, yPos)
+    homeInput.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    homeInput.PlaceholderText = "Paste koordinat Home (x,y,z)"
+    homeInput.Text = homeCoord and string.format("%d,%d,%d", homeCoord.x, homeCoord.y, homeCoord.z) or ""
+    homeInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+    homeInput.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+    homeInput.TextSize = 9
+    homeInput.Font = Enum.Font.Gotham
+    homeInput.ClearTextOnFocus = false
+    homeInput.Parent = teleportTab
+
+    local hCorner = Instance.new("UICorner")
+    hCorner.CornerRadius = UDim.new(0, 6)
+    hCorner.Parent = homeInput
+
+    homeInput.FocusLost:Connect(function()
+        local coords = parseCoords(homeInput.Text)
+        if coords then
+            homeCoord = coords
             notif("✅ Home di-set!")
             saveConfig()
-        else
-            notif("❌ Copy koordinat dulu")
+        elseif homeInput.Text ~= "" then
+            notif("❌ Format salah! Gunakan: x,y,z")
+            homeInput.Text = homeCoord and string.format("%d,%d,%d", homeCoord.x, homeCoord.y, homeCoord.z) or ""
         end
-    end, Color3.fromRGB(70, 180, 100), UDim2.new(0.48, 0, 0, 35), teleportTab)
-    setHomeBtn.Position = UDim2.new(0, 0, 0, yPos)
+    end)
 
-    local setTujuanBtn = createBtn("🎯 SET TUJUAN", function()
-        if copiedCoord then
-            tujuanCoord = copiedCoord
+    -- Tujuan Input
+    local tujuanInput = Instance.new("TextBox")
+    tujuanInput.Size = UDim2.new(0.48, 0, 0, 35)
+    tujuanInput.Position = UDim2.new(0.52, 0, 0, yPos)
+    tujuanInput.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    tujuanInput.PlaceholderText = "Paste koordinat Tujuan (x,y,z)"
+    tujuanInput.Text = tujuanCoord and string.format("%d,%d,%d", tujuanCoord.x, tujuanCoord.y, tujuanCoord.z) or ""
+    tujuanInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+    tujuanInput.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+    tujuanInput.TextSize = 9
+    tujuanInput.Font = Enum.Font.Gotham
+    tujuanInput.ClearTextOnFocus = false
+    tujuanInput.Parent = teleportTab
+
+    local tCorner2 = Instance.new("UICorner")
+    tCorner2.CornerRadius = UDim.new(0, 6)
+    tCorner2.Parent = tujuanInput
+
+    tujuanInput.FocusLost:Connect(function()
+        local coords = parseCoords(tujuanInput.Text)
+        if coords then
+            tujuanCoord = coords
             notif("✅ Tujuan di-set!")
             saveConfig()
-        else
-            notif("❌ Copy koordinat dulu")
+        elseif tujuanInput.Text ~= "" then
+            notif("❌ Format salah! Gunakan: x,y,z")
+            tujuanInput.Text = tujuanCoord and string.format("%d,%d,%d", tujuanCoord.x, tujuanCoord.y, tujuanCoord.z) or ""
         end
-    end, Color3.fromRGB(220, 100, 60), UDim2.new(0.48, 0, 0, 35), teleportTab)
-    setTujuanBtn.Position = UDim2.new(0.52, 0, 0, yPos)
+    end)
 
     yPos = yPos + 45
 
@@ -423,6 +470,11 @@ local function createGUI()
             return
         end
 
+        if isRunning then
+            notif("⏸️ Waktu belum selesai!")
+            return
+        end
+
         autoEnabled = not autoEnabled
         
         if autoEnabled then
@@ -445,7 +497,6 @@ local function createGUI()
     playerTab.BackgroundTransparency = 1
     playerTab.Visible = false
     playerTab.Parent = rightContent
-
     -- Player List Frame
     local playerFrame = Instance.new("ScrollingFrame")
     playerFrame.Size = UDim2.new(1, 0, 1, -45)
@@ -639,11 +690,11 @@ local function createGUI()
         end
     end)
 
-    return status
+    return status, startBtn
 end
 
 -- Auto Teleport Logic
-local statusLabel = createGUI()
+local statusLabel, startBtn = createGUI()
 
 -- Update Time with Seconds
 task.spawn(function()
@@ -675,6 +726,7 @@ task.spawn(function()
                 if now == time and now ~= lastCheck then
                     lastCheck = now
                     isRunning = true
+                    autoStartTime = tick()
                     
                     if homeCoord and tujuanCoord then
                         statusLabel.Text = "▶️ TP ke TUJUAN...\n⏰ " .. os.date("%H:%M:%S")
@@ -703,8 +755,17 @@ task.spawn(function()
                     end
                     
                     isRunning = false
+                    autoStartTime = 0
                     task.wait(61)
                 end
+            end
+        elseif not autoEnabled and isRunning then
+            -- Jika auto dicancel saat masih running, load sisa waktu
+            local elapsed = tick() - autoStartTime
+            local remaining = waitTime - elapsed
+            
+            if remaining > 0 then
+                statusLabel.Text = "⏸️ WAKTU BELUM SELESAI\n⏰ Sisa: " .. fTime(math.floor(remaining))
             end
         end
     end
