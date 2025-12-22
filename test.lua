@@ -461,7 +461,6 @@ local function createGUI()
     testTujuanBtn.Position = UDim2.new(0, 0, 0, yPos)
 
     yPos = yPos + 36
-
     -- Info Label
     local info = Instance.new("TextLabel")
     info.Size = UDim2.new(1, 0, 0, 72)
@@ -589,6 +588,7 @@ local function createGUI()
     playerTab.BackgroundTransparency = 1
     playerTab.Visible = false
     playerTab.Parent = rightContent
+
     -- Player List Frame
     local playerFrame = Instance.new("ScrollingFrame")
     playerFrame.Size = UDim2.new(1, 0, 1, -36)
