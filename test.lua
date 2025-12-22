@@ -1,6 +1,6 @@
 
 -- Christmas Cave Auto Teleport Script
--- Compact version with dropdown player selector
+-- Compact version with tabs
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -18,6 +18,7 @@ local waitTime = 30 * 60
 local copiedCoord = nil
 local homeCoord = nil
 local tujuanCoord = nil
+local currentTab = "teleport"
 local autoStartTime = 0
 local eventDuration = 30 * 60
 local configLoaded = false
@@ -236,11 +237,11 @@ local function createGUI()
         GUI.Parent = game:GetService("CoreGui")
     end
 
-    -- Main Frame (Compact Size)
+    -- Main Frame
     mainFrame = Instance.new("Frame")
     mainFrame.Name = "MainFrame"
-    mainFrame.Size = UDim2.new(0, 320, 0, 400)
-    mainFrame.Position = UDim2.new(0.5, -160, 0.5, -200)
+    mainFrame.Size = UDim2.new(0, 380, 0, 420)
+    mainFrame.Position = UDim2.new(0.5, -190, 0.5, -210)
     mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
     mainFrame.BorderSizePixel = 0
     mainFrame.Active = true
@@ -314,32 +315,83 @@ local function createGUI()
     cCorner.Parent = closeBtn
 
     -- Content Container
-    local content = Instance.new("Frame")
-    content.Name = "Content"
-    content.Size = UDim2.new(1, -16, 1, -36)
-    content.Position = UDim2.new(0, 8, 0, 32)
-    content.BackgroundTransparency = 1
-    content.Parent = mainFrame
+    local contentContainer = Instance.new("Frame")
+    contentContainer.Name = "ContentContainer"
+    contentContainer.Size = UDim2.new(1, -16, 1, -36)
+    contentContainer.Position = UDim2.new(0, 8, 0, 32)
+    contentContainer.BackgroundTransparency = 1
+    contentContainer.Parent = mainFrame
 
-    local yPos = 0
+    -- Left Menu
+    local leftMenu = Instance.new("Frame")
+    leftMenu.Name = "LeftMenu"
+    leftMenu.Size = UDim2.new(0, 80, 1, 0)
+    leftMenu.Position = UDim2.new(0, 0, 0, 0)
+    leftMenu.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+    leftMenu.BorderSizePixel = 0
+    leftMenu.Parent = contentContainer
+
+    local lmCorner = Instance.new("UICorner")
+    lmCorner.CornerRadius = UDim.new(0, 6)
+    lmCorner.Parent = leftMenu
+
+    -- Tab Buttons
+    local function createTabBtn(text, icon, yPos, tabName)
+        local btn = Instance.new("TextButton")
+        btn.Name = tabName .. "Btn"
+        btn.Size = UDim2.new(1, -8, 0, 34)
+        btn.Position = UDim2.new(0, 4, 0, yPos)
+        btn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+        btn.Text = icon .. "\n" .. text
+        btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+        btn.TextSize = 8
+        btn.Font = Enum.Font.GothamSemibold
+        btn.Parent = leftMenu
+
+        local btnCorner = Instance.new("UICorner")
+        btnCorner.CornerRadius = UDim.new(0, 5)
+        btnCorner.Parent = btn
+
+        return btn
+    end
+
+    local teleportBtn = createTabBtn("Teleport", "🎯", 4, "teleport")
+    local playerBtn = createTabBtn("TP Player", "👥", 42, "player")
+
+    -- Right Content Frame
+    local rightContent = Instance.new("Frame")
+    rightContent.Name = "RightContent"
+    rightContent.Size = UDim2.new(1, -86, 1, 0)
+    rightContent.Position = UDim2.new(0, 84, 0, 0)
+    rightContent.BackgroundTransparency = 1
+    rightContent.Parent = contentContainer
 
     -- Status Label
     local status = Instance.new("TextLabel")
     status.Name = "Status"
     status.Size = UDim2.new(1, 0, 0, 32)
-    status.Position = UDim2.new(0, 0, 0, yPos)
+    status.Position = UDim2.new(0, 0, 0, 0)
     status.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
     status.Text = "⏸️ INACTIVE | ⏰ 00:00:00"
     status.TextColor3 = Color3.fromRGB(255, 255, 255)
-    status.TextSize = 10
+    status.TextSize = 9
     status.Font = Enum.Font.GothamBold
-    status.Parent = content
+    status.Parent = rightContent
 
     local sCorner = Instance.new("UICorner")
     sCorner.CornerRadius = UDim.new(0, 5)
     sCorner.Parent = status
 
-    yPos = yPos + 36
+    -- Teleport Tab Content
+    local teleportTab = Instance.new("Frame")
+    teleportTab.Name = "TeleportTab"
+    teleportTab.Size = UDim2.new(1, 0, 1, -36)
+    teleportTab.Position = UDim2.new(0, 0, 0, 36)
+    teleportTab.BackgroundTransparency = 1
+    teleportTab.Visible = true
+    teleportTab.Parent = rightContent
+
+    local yPos = 0
 
     -- Helper function to create buttons
     local function createBtn(text, callback, color, size, parent, pos)
@@ -349,7 +401,7 @@ local function createGUI()
         b.BackgroundColor3 = color
         b.Text = text
         b.TextColor3 = Color3.fromRGB(255, 255, 255)
-        b.TextSize = 9
+        b.TextSize = 8
         b.Font = Enum.Font.GothamSemibold
         b.Parent = parent
         
@@ -374,10 +426,10 @@ local function createGUI()
         else
             notif("❌ Failed to copy")
         end
-    end, Color3.fromRGB(70, 150, 230), nil, content)
+    end, Color3.fromRGB(70, 150, 230), nil, teleportTab)
     copyBtn.Position = UDim2.new(0, 0, 0, yPos)
 
-    yPos = yPos + 30
+    yPos = yPos + 28
 
     -- Home Section
     local testHomeBtn = createBtn("🏠", function()
@@ -390,7 +442,7 @@ local function createGUI()
         else
             notif("❌ Set Home first!")
         end
-    end, Color3.fromRGB(100, 150, 200), UDim2.new(0.18, 0, 0, 26), content, UDim2.new(0, 0, 0, yPos))
+    end, Color3.fromRGB(100, 150, 200), UDim2.new(0.18, 0, 0, 26), teleportTab, UDim2.new(0, 0, 0, yPos))
 
     local homeInput = Instance.new("TextBox")
     homeInput.Size = UDim2.new(0.80, 0, 0, 26)
@@ -400,10 +452,10 @@ local function createGUI()
     homeInput.Text = ""
     homeInput.TextColor3 = Color3.fromRGB(255, 255, 255)
     homeInput.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
-    homeInput.TextSize = 8
+    homeInput.TextSize = 7
     homeInput.Font = Enum.Font.Gotham
     homeInput.ClearTextOnFocus = false
-    homeInput.Parent = content
+    homeInput.Parent = teleportTab
 
     local hCorner = Instance.new("UICorner")
     hCorner.CornerRadius = UDim.new(0, 4)
@@ -421,7 +473,7 @@ local function createGUI()
         end
     end)
 
-    yPos = yPos + 30
+    yPos = yPos + 28
 
     -- Destination Section
     local testDestBtn = createBtn("🎯", function()
@@ -434,7 +486,7 @@ local function createGUI()
         else
             notif("❌ Set Dest first!")
         end
-    end, Color3.fromRGB(200, 120, 80), UDim2.new(0.18, 0, 0, 26), content, UDim2.new(0, 0, 0, yPos))
+    end, Color3.fromRGB(200, 120, 80), UDim2.new(0.18, 0, 0, 26), teleportTab, UDim2.new(0, 0, 0, yPos))
 
     local tujuanInput = Instance.new("TextBox")
     tujuanInput.Size = UDim2.new(0.80, 0, 0, 26)
@@ -444,10 +496,10 @@ local function createGUI()
     tujuanInput.Text = ""
     tujuanInput.TextColor3 = Color3.fromRGB(255, 255, 255)
     tujuanInput.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
-    tujuanInput.TextSize = 8
+    tujuanInput.TextSize = 7
     tujuanInput.Font = Enum.Font.Gotham
     tujuanInput.ClearTextOnFocus = false
-    tujuanInput.Parent = content
+    tujuanInput.Parent = teleportTab
 
     local tCorner2 = Instance.new("UICorner")
     tCorner2.CornerRadius = UDim.new(0, 4)
@@ -465,49 +517,155 @@ local function createGUI()
         end
     end)
 
-    yPos = yPos + 34
+    yPos = yPos + 32
 
-    -- TP to Player Section
+    -- Wait Time Label
+    local waitLabel = Instance.new("TextLabel")
+    waitLabel.Size = UDim2.new(1, 0, 0, 14)
+    waitLabel.Position = UDim2.new(0, 0, 0, yPos)
+    waitLabel.BackgroundTransparency = 1
+    waitLabel.Text = "⏱️ " .. fTime(waitTime)
+    waitLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    waitLabel.TextSize = 8
+    waitLabel.Font = Enum.Font.GothamBold
+    waitLabel.TextXAlignment = Enum.TextXAlignment.Left
+    waitLabel.Parent = teleportTab
+
+    yPos = yPos + 16
+
+    -- Wait Time Inputs
+    local waitInputMin = Instance.new("TextBox")
+    waitInputMin.Size = UDim2.new(0.28, 0, 0, 24)
+    waitInputMin.Position = UDim2.new(0, 0, 0, yPos)
+    waitInputMin.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    waitInputMin.PlaceholderText = "Min"
+    waitInputMin.Text = tostring(math.floor(waitTime/60))
+    waitInputMin.TextColor3 = Color3.fromRGB(255, 255, 255)
+    waitInputMin.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+    waitInputMin.TextSize = 8
+    waitInputMin.Font = Enum.Font.Gotham
+    waitInputMin.ClearTextOnFocus = false
+    waitInputMin.Parent = teleportTab
+
+    local wCornerMin = Instance.new("UICorner")
+    wCornerMin.CornerRadius = UDim.new(0, 4)
+    wCornerMin.Parent = waitInputMin
+
+    local waitInputSec = Instance.new("TextBox")
+    waitInputSec.Size = UDim2.new(0.28, 0, 0, 24)
+    waitInputSec.Position = UDim2.new(0.30, 0, 0, yPos)
+    waitInputSec.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    waitInputSec.PlaceholderText = "Sec"
+    waitInputSec.Text = tostring(waitTime%60)
+    waitInputSec.TextColor3 = Color3.fromRGB(255, 255, 255)
+    waitInputSec.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+    waitInputSec.TextSize = 8
+    waitInputSec.Font = Enum.Font.Gotham
+    waitInputSec.ClearTextOnFocus = false
+    waitInputSec.Parent = teleportTab
+
+    local wCornerSec = Instance.new("UICorner")
+    wCornerSec.CornerRadius = UDim.new(0, 4)
+    wCornerSec.Parent = waitInputSec
+
+    local setWaitBtn = createBtn("✅ SET", function()
+        local m = tonumber(waitInputMin.Text) or 0
+        local s = tonumber(waitInputSec.Text) or 0
+        
+        if m >= 0 and s >= 0 and s < 60 and (m > 0 or s > 0) then
+            waitTime = (m * 60) + s
+            waitLabel.Text = "⏱️ " .. fTime(waitTime)
+            notif("✅ Set: " .. m .. "m " .. s .. "s")
+            saveConfig()
+        else
+            notif("❌ Invalid!")
+        end
+    end, Color3.fromRGB(70, 180, 100), UDim2.new(0.40, 0, 0, 24), teleportTab, UDim2.new(0.60, 0, 0, yPos))
+
+    yPos = yPos + 28
+
+    -- Info Label
+    local info = Instance.new("TextLabel")
+    info.Size = UDim2.new(1, 0, 0, 48)
+    info.Position = UDim2.new(0, 0, 0, yPos)
+    info.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    info.TextColor3 = Color3.fromRGB(180, 180, 180)
+    info.TextSize = 7
+    info.Font = Enum.Font.Gotham
+    info.TextXAlignment = Enum.TextXAlignment.Left
+    info.TextYAlignment = Enum.TextYAlignment.Top
+    info.Parent = teleportTab
+
+    local iCorner = Instance.new("UICorner")
+    iCorner.CornerRadius = UDim.new(0, 4)
+    iCorner.Parent = info
+
+    local iPad = Instance.new("UIPadding")
+    iPad.PaddingLeft = UDim.new(0, 4)
+    iPad.PaddingTop = UDim.new(0, 4)
+    iPad.Parent = info
+
+    info.Text = "📅 11:00, 13:00, 15:00, 17:00, 19:00\n21:00, 23:00, 01:00, 03:00, 05:00, 07:00, 09:00\n⏱️ 30min | 🔄 Home→Dest→Home"
+
+    yPos = yPos + 52
+
+    -- Start/Stop Button
+    local startBtn = createBtn("▶️ START AUTO", function()
+        if not homeCoord or not tujuanCoord then
+            notif("❌ Set Home & Dest first!")
+            return
+        end
+
+        if isRunning then
+            notif("⏸️ Wait time not finished!")
+            return
+        end
+
+        autoEnabled = not autoEnabled
+        
+        if autoEnabled then
+            startBtn.Text = "⏹️ STOP AUTO"
+            startBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
+            notif("✅ Auto ENABLED!")
+        else
+            startBtn.Text = "▶️ START AUTO"
+            startBtn.BackgroundColor3 = Color3.fromRGB(70, 180, 100)
+            notif("⏸️ Auto STOPPED")
+        end
+    end, Color3.fromRGB(70, 180, 100), UDim2.new(1, 0, 0, 30), teleportTab)
+    startBtn.Position = UDim2.new(0, 0, 0, yPos)
+
+    -- Player Tab Content
+    local playerTab = Instance.new("Frame")
+    playerTab.Name = "PlayerTab"
+    playerTab.Size = UDim2.new(1, 0, 1, -36)
+    playerTab.Position = UDim2.new(0, 0, 0, 36)
+    playerTab.BackgroundTransparency = 1
+    playerTab.Visible = false
+    playerTab.Parent = rightContent
+
+    yPos = 0
+
     -- Dropdown Button
     local dropdownBtn = Instance.new("TextButton")
-    dropdownBtn.Size = UDim2.new(0.60, 0, 0, 26)
+    dropdownBtn.Size = UDim2.new(1, 0, 0, 26)
     dropdownBtn.Position = UDim2.new(0, 0, 0, yPos)
     dropdownBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
     dropdownBtn.Text = "👥 Select Player ▼"
     dropdownBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     dropdownBtn.TextSize = 8
     dropdownBtn.Font = Enum.Font.GothamSemibold
-    dropdownBtn.Parent = content
+    dropdownBtn.Parent = playerTab
 
     local dCorner = Instance.new("UICorner")
     dCorner.CornerRadius = UDim.new(0, 4)
     dCorner.Parent = dropdownBtn
 
-    -- Refresh Button
-    local refreshBtn = createBtn("🔄", function()
-        notif("🔄 Refreshing...")
-    end, Color3.fromRGB(150, 100, 220), UDim2.new(0.18, 0, 0, 26), content, UDim2.new(0.62, 0, 0, yPos))
-
-    -- Target Indicator
-    local targetLabel = Instance.new("TextLabel")
-    targetLabel.Size = UDim2.new(0.18, 0, 0, 26)
-    targetLabel.Position = UDim2.new(0.82, 0, 0, yPos)
-    targetLabel.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-    targetLabel.Text = "🎯"
-    targetLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    targetLabel.TextSize = 14
-    targetLabel.Font = Enum.Font.GothamBold
-    targetLabel.Parent = content
-
-    local tLabelCorner = Instance.new("UICorner")
-    tLabelCorner.CornerRadius = UDim.new(0, 4)
-    tLabelCorner.Parent = targetLabel
-
-    yPos = yPos + 30
+    yPos = yPos + 28
 
     -- Dropdown List Container
     local dropdownList = Instance.new("ScrollingFrame")
-    dropdownList.Size = UDim2.new(0.60, 0, 0, 0)
+    dropdownList.Size = UDim2.new(1, 0, 0, 0)
     dropdownList.Position = UDim2.new(0, 0, 0, yPos)
     dropdownList.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
     dropdownList.BorderSizePixel = 0
@@ -516,14 +674,27 @@ local function createGUI()
     dropdownList.CanvasSize = UDim2.new(0, 0, 0, 0)
     dropdownList.Visible = false
     dropdownList.ClipsDescendants = true
-    dropdownList.Parent = content
+    dropdownList.Parent = playerTab
 
     local dlCorner = Instance.new("UICorner")
     dlCorner.CornerRadius = UDim.new(0, 4)
     dlCorner.Parent = dropdownList
 
-    -- TP to Player Button
-    local tpToPlayerBtn = createBtn("▶️ TELEPORT", function()
+    -- Refresh and Target Buttons Container
+    local btnContainer = Instance.new("Frame")
+    btnContainer.Size = UDim2.new(1, 0, 0, 26)
+    btnContainer.Position = UDim2.new(0, 0, 0, yPos)
+    btnContainer.BackgroundTransparency = 1
+    btnContainer.Visible = true
+    btnContainer.Parent = playerTab
+
+    -- Refresh Button
+    local refreshBtn = createBtn("🔄 Refresh", function()
+        -- Update function will be connected later
+    end, Color3.fromRGB(150, 100, 220), UDim2.new(0.48, 0, 0, 26), btnContainer, UDim2.new(0, 0, 0, 0))
+
+    -- Target Button (TP to selected player)
+    local targetBtn = createBtn("🎯 Target", function()
         if selectedPlayer then
             if tpPlayer(selectedPlayer.actualName) then
                 notif("✅ TP to " .. selectedPlayer.display)
@@ -533,11 +704,32 @@ local function createGUI()
         else
             notif("❌ Select player first!")
         end
-    end, Color3.fromRGB(70, 180, 100), UDim2.new(1, 0, 0, 28), content, UDim2.new(0, 0, 0, yPos))
-    tpToPlayerBtn.Visible = true
+    end, Color3.fromRGB(220, 80, 80), UDim2.new(0.48, 0, 0, 26), btnContainer, UDim2.new(0.52, 0, 0, 0))
 
-    local tpBtnYPos = yPos
-    yPos = yPos + 32
+    yPos = yPos + 30
+
+    -- Selected Player Info
+    local selectedInfo = Instance.new("TextLabel")
+    selectedInfo.Size = UDim2.new(1, 0, 0, 0)
+    selectedInfo.Position = UDim2.new(0, 0, 0, yPos)
+    selectedInfo.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    selectedInfo.Text = ""
+    selectedInfo.TextColor3 = Color3.fromRGB(200, 200, 200)
+    selectedInfo.TextSize = 7
+    selectedInfo.Font = Enum.Font.Gotham
+    selectedInfo.TextWrapped = true
+    selectedInfo.Visible = false
+    selectedInfo.Parent = playerTab
+
+    local siCorner = Instance.new("UICorner")
+    siCorner.CornerRadius = UDim.new(0, 4)
+    siCorner.Parent = selectedInfo
+
+    local siPad = Instance.new("UIPadding")
+    siPad.PaddingLeft = UDim.new(0, 4)
+    siPad.PaddingTop = UDim.new(0, 4)
+    siPad.PaddingBottom = UDim.new(0, 4)
+    siPad.Parent = selectedInfo
 
     -- Update Player Dropdown
     local function updateDropdown()
@@ -553,7 +745,7 @@ local function createGUI()
         if #players == 0 then
             dropdownBtn.Text = "👥 No Players"
         else
-            dropdownBtn.Text = selectedPlayer and "👥 " .. selectedPlayer.display or "👥 Select Player ▼"
+            dropdownBtn.Text = selectedPlayer and ("👥 " .. selectedPlayer.display) or "👥 Select Player ▼"
             
             for _, playerData in ipairs(players) do
                 local pb = Instance.new("TextButton")
@@ -580,7 +772,13 @@ local function createGUI()
                     dropdownBtn.Text = "👥 " .. playerData.display
                     dropdownList.Visible = false
                     dropdownOpen = false
-                    tpToPlayerBtn.Visible = true
+                    btnContainer.Visible = true
+                    
+                    -- Show selected player info
+                    selectedInfo.Text = "Selected: " .. playerData.display
+                    selectedInfo.Size = UDim2.new(1, 0, 0, 24)
+                    selectedInfo.Visible = true
+                    
                     notif("✅ Selected: " .. playerData.display)
                 end)
 
@@ -596,12 +794,17 @@ local function createGUI()
         dropdownOpen = not dropdownOpen
         if dropdownOpen then
             updateDropdown()
-            dropdownList.Size = UDim2.new(0.60, 0, 0, math.min(120, dropdownList.CanvasSize.Y.Offset))
+            local listHeight = math.min(150, dropdownList.CanvasSize.Y.Offset)
+            dropdownList.Size = UDim2.new(1, 0, 0, listHeight)
             dropdownList.Visible = true
-            tpToPlayerBtn.Visible = false
+            btnContainer.Visible = false
+            selectedInfo.Visible = false
         else
             dropdownList.Visible = false
-            tpToPlayerBtn.Visible = true
+            btnContainer.Visible = true
+            if selectedPlayer then
+                selectedInfo.Visible = true
+            end
         end
     end)
 
@@ -611,121 +814,43 @@ local function createGUI()
         notif("🔄 List refreshed!")
     end)
 
-    -- Wait Time Label
-    local waitLabel = Instance.new("TextLabel")
-    waitLabel.Size = UDim2.new(1, 0, 0, 16)
-    waitLabel.Position = UDim2.new(0, 0, 0, yPos)
-    waitLabel.BackgroundTransparency = 1
-    waitLabel.Text = "⏱️ " .. fTime(waitTime)
-    waitLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    waitLabel.TextSize = 9
-    waitLabel.Font = Enum.Font.GothamBold
-    waitLabel.TextXAlignment = Enum.TextXAlignment.Left
-    waitLabel.Parent = content
-
-    yPos = yPos + 18
-
-    -- Wait Time Inputs
-    local waitInputMin = Instance.new("TextBox")
-    waitInputMin.Size = UDim2.new(0.28, 0, 0, 26)
-    waitInputMin.Position = UDim2.new(0, 0, 0, yPos)
-    waitInputMin.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-    waitInputMin.PlaceholderText = "Min"
-    waitInputMin.Text = tostring(math.floor(waitTime/60))
-    waitInputMin.TextColor3 = Color3.fromRGB(255, 255, 255)
-    waitInputMin.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
-    waitInputMin.TextSize = 9
-    waitInputMin.Font = Enum.Font.Gotham
-    waitInputMin.ClearTextOnFocus = false
-    waitInputMin.Parent = content
-
-    local wCornerMin = Instance.new("UICorner")
-    wCornerMin.CornerRadius = UDim.new(0, 4)
-    wCornerMin.Parent = waitInputMin
-
-    local waitInputSec = Instance.new("TextBox")
-    waitInputSec.Size = UDim2.new(0.28, 0, 0, 26)
-    waitInputSec.Position = UDim2.new(0.30, 0, 0, yPos)
-    waitInputSec.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-    waitInputSec.PlaceholderText = "Sec"
-    waitInputSec.Text = tostring(waitTime%60)
-    waitInputSec.TextColor3 = Color3.fromRGB(255, 255, 255)
-    waitInputSec.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
-    waitInputSec.TextSize = 9
-    waitInputSec.Font = Enum.Font.Gotham
-    waitInputSec.ClearTextOnFocus = false
-    waitInputSec.Parent = content
-
-    local wCornerSec = Instance.new("UICorner")
-    wCornerSec.CornerRadius = UDim.new(0, 4)
-    wCornerSec.Parent = waitInputSec
-
-    local setWaitBtn = createBtn("✅ SET", function()
-        local m = tonumber(waitInputMin.Text) or 0
-        local s = tonumber(waitInputSec.Text) or 0
+    -- Tab Switching Logic
+    local function switchTab(tabName)
+        currentTab = tabName
         
-        if m >= 0 and s >= 0 and s < 60 and (m > 0 or s > 0) then
-            waitTime = (m * 60) + s
-            waitLabel.Text = "⏱️ " .. fTime(waitTime)
-            notif("✅ Set: " .. m .. "m " .. s .. "s")
-            saveConfig()
-        else
-            notif("❌ Invalid!")
-        end
-    end, Color3.fromRGB(70, 180, 100), UDim2.new(0.40, 0, 0, 26), content, UDim2.new(0.60, 0, 0, yPos))
-
-    yPos = yPos + 34
-
-    -- Info Label
-    local info = Instance.new("TextLabel")
-    info.Size = UDim2.new(1, 0, 0, 50)
-    info.Position = UDim2.new(0, 0, 0, yPos)
-    info.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-    info.TextColor3 = Color3.fromRGB(180, 180, 180)
-    info.TextSize = 7
-    info.Font = Enum.Font.Gotham
-    info.TextXAlignment = Enum.TextXAlignment.Left
-    info.TextYAlignment = Enum.TextYAlignment.Top
-    info.Parent = content
-
-    local iCorner = Instance.new("UICorner")
-    iCorner.CornerRadius = UDim.new(0, 4)
-    iCorner.Parent = info
-
-    local iPad = Instance.new("UIPadding")
-    iPad.PaddingLeft = UDim.new(0, 5)
-    iPad.PaddingTop = UDim.new(0, 5)
-    iPad.Parent = info
-
-    info.Text = "📅 11:00, 13:00, 15:00, 17:00, 19:00\n21:00, 23:00, 01:00, 03:00, 05:00, 07:00, 09:00\n⏱️ 30min | 🔄 Home→Dest→Home"
-
-    yPos = yPos + 54
-
-    -- Start/Stop Button
-    local startBtn = createBtn("▶️ START AUTO", function()
-        if not homeCoord or not tujuanCoord then
-            notif("❌ Set Home & Dest first!")
-            return
-        end
-
-        if isRunning then
-            notif("⏸️ Wait time not finished!")
-            return
-        end
-
-        autoEnabled = not autoEnabled
+        -- Hide all tabs
+        teleportTab.Visible = false
+        playerTab.Visible = false
         
-        if autoEnabled then
-            startBtn.Text = "⏹️ STOP AUTO"
-            startBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
-            notif("✅ Auto ENABLED!")
-        else
-            startBtn.Text = "▶️ START AUTO"
-            startBtn.BackgroundColor3 = Color3.fromRGB(70, 180, 100)
-            notif("⏸️ Auto STOPPED")
+        -- Reset button colors
+        teleportBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+        playerBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+        teleportBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+        playerBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+        
+        -- Show selected tab
+        if tabName == "teleport" then
+            teleportTab.Visible = true
+            teleportBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+            teleportBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        elseif tabName == "player" then
+            playerTab.Visible = true
+            playerBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+            playerBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            updateDropdown()
         end
-    end, Color3.fromRGB(70, 180, 100), UDim2.new(1, 0, 0, 32), content)
-    startBtn.Position = UDim2.new(0, 0, 0, yPos)
+    end
+
+    teleportBtn.MouseButton1Click:Connect(function()
+        switchTab("teleport")
+    end)
+
+    playerBtn.MouseButton1Click:Connect(function()
+        switchTab("player")
+    end)
+
+    -- Initialize first tab
+    switchTab("teleport")
 
     -- Menu Button (for minimize)
     local menuBtn = Instance.new("TextButton")
@@ -783,7 +908,10 @@ local function createGUI()
                 if not inDropdownBtn and not inDropdownList then
                     dropdownList.Visible = false
                     dropdownOpen = false
-                    tpToPlayerBtn.Visible = true
+                    btnContainer.Visible = true
+                    if selectedPlayer then
+                        selectedInfo.Visible = true
+                    end
                 end
             end
         end
