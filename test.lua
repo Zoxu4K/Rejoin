@@ -1,6 +1,6 @@
 
 -- Christmas Cave Auto Teleport Script
--- Compact version with simple UI
+-- Compact version with dropdown player selector
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -21,6 +21,8 @@ local tujuanCoord = nil
 local autoStartTime = 0
 local eventDuration = 30 * 60
 local configLoaded = false
+local selectedPlayer = nil
+local dropdownOpen = false
 
 -- Config
 local CONFIG = "XmasConfig.json"
@@ -124,6 +126,20 @@ local function tpPlayer(name)
     return false
 end
 
+-- Get Players with formatted names
+local function getPlayers()
+    local list = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            local displayName = p.DisplayName
+            local userName = p.Name
+            local formattedName = displayName .. " (@" .. userName .. ")"
+            table.insert(list, {display = formattedName, actualName = userName})
+        end
+    end
+    return list
+end
+
 -- Notify
 local function notif(msg)
     pcall(function()
@@ -223,8 +239,8 @@ local function createGUI()
     -- Main Frame (Compact Size)
     mainFrame = Instance.new("Frame")
     mainFrame.Name = "MainFrame"
-    mainFrame.Size = UDim2.new(0, 320, 0, 380)
-    mainFrame.Position = UDim2.new(0.5, -160, 0.5, -190)
+    mainFrame.Size = UDim2.new(0, 320, 0, 400)
+    mainFrame.Position = UDim2.new(0.5, -160, 0.5, -200)
     mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
     mainFrame.BorderSizePixel = 0
     mainFrame.Active = true
@@ -288,7 +304,7 @@ local function createGUI()
     closeBtn.Position = UDim2.new(1, -25, 0, 4)
     closeBtn.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
     closeBtn.Text = "×"
-    minBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     closeBtn.TextSize = 16
     closeBtn.Font = Enum.Font.GothamBold
     closeBtn.Parent = titleBar
@@ -452,52 +468,148 @@ local function createGUI()
     yPos = yPos + 34
 
     -- TP to Player Section
-    local tpPlayerLabel = Instance.new("TextLabel")
-    tpPlayerLabel.Size = UDim2.new(1, 0, 0, 16)
-    tpPlayerLabel.Position = UDim2.new(0, 0, 0, yPos)
-    tpPlayerLabel.BackgroundTransparency = 1
-    tpPlayerLabel.Text = "👥 TP to Player:"
-    tpPlayerLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-    tpPlayerLabel.TextSize = 9
-    tpPlayerLabel.Font = Enum.Font.GothamBold
-    tpPlayerLabel.TextXAlignment = Enum.TextXAlignment.Left
-    tpPlayerLabel.Parent = content
+    -- Dropdown Button
+    local dropdownBtn = Instance.new("TextButton")
+    dropdownBtn.Size = UDim2.new(0.60, 0, 0, 26)
+    dropdownBtn.Position = UDim2.new(0, 0, 0, yPos)
+    dropdownBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    dropdownBtn.Text = "👥 Select Player ▼"
+    dropdownBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    dropdownBtn.TextSize = 8
+    dropdownBtn.Font = Enum.Font.GothamSemibold
+    dropdownBtn.Parent = content
 
-    yPos = yPos + 18
+    local dCorner = Instance.new("UICorner")
+    dCorner.CornerRadius = UDim.new(0, 4)
+    dCorner.Parent = dropdownBtn
 
-    -- Player Name Input
-    local playerInput = Instance.new("TextBox")
-    playerInput.Size = UDim2.new(0.64, 0, 0, 26)
-    playerInput.Position = UDim2.new(0, 0, 0, yPos)
-    playerInput.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-    playerInput.PlaceholderText = "Username or @username"
-    playerInput.Text = ""
-    playerInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-    playerInput.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
-    playerInput.TextSize = 8
-    playerInput.Font = Enum.Font.Gotham
-    playerInput.ClearTextOnFocus = false
-    playerInput.Parent = content
+    -- Refresh Button
+    local refreshBtn = createBtn("🔄", function()
+        notif("🔄 Refreshing...")
+    end, Color3.fromRGB(150, 100, 220), UDim2.new(0.18, 0, 0, 26), content, UDim2.new(0.62, 0, 0, yPos))
 
-    local pCorner = Instance.new("UICorner")
-    pCorner.CornerRadius = UDim.new(0, 4)
-    pCorner.Parent = playerInput
+    -- Target Indicator
+    local targetLabel = Instance.new("TextLabel")
+    targetLabel.Size = UDim2.new(0.18, 0, 0, 26)
+    targetLabel.Position = UDim2.new(0.82, 0, 0, yPos)
+    targetLabel.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    targetLabel.Text = "🎯"
+    targetLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    targetLabel.TextSize = 14
+    targetLabel.Font = Enum.Font.GothamBold
+    targetLabel.Parent = content
+
+    local tLabelCorner = Instance.new("UICorner")
+    tLabelCorner.CornerRadius = UDim.new(0, 4)
+    tLabelCorner.Parent = targetLabel
+
+    yPos = yPos + 30
+
+    -- Dropdown List Container
+    local dropdownList = Instance.new("ScrollingFrame")
+    dropdownList.Size = UDim2.new(0.60, 0, 0, 0)
+    dropdownList.Position = UDim2.new(0, 0, 0, yPos)
+    dropdownList.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    dropdownList.BorderSizePixel = 0
+    dropdownList.ScrollBarThickness = 3
+    dropdownList.ScrollBarImageColor3 = Color3.fromRGB(200, 50, 50)
+    dropdownList.CanvasSize = UDim2.new(0, 0, 0, 0)
+    dropdownList.Visible = false
+    dropdownList.ClipsDescendants = true
+    dropdownList.Parent = content
+
+    local dlCorner = Instance.new("UICorner")
+    dlCorner.CornerRadius = UDim.new(0, 4)
+    dlCorner.Parent = dropdownList
 
     -- TP to Player Button
-    local tpToPlayerBtn = createBtn("▶️ GO", function()
-        local targetName = playerInput.Text:gsub("^@", "")
-        if targetName ~= "" then
-            if tpPlayer(targetName) then
-                notif("✅ TP to " .. targetName)
+    local tpToPlayerBtn = createBtn("▶️ TELEPORT", function()
+        if selectedPlayer then
+            if tpPlayer(selectedPlayer.actualName) then
+                notif("✅ TP to " .. selectedPlayer.display)
             else
                 notif("❌ Player not found!")
             end
         else
-            notif("❌ Enter username!")
+            notif("❌ Select player first!")
         end
-    end, Color3.fromRGB(70, 130, 220), UDim2.new(0.34, 0, 0, 26), content, UDim2.new(0.66, 0, 0, yPos))
+    end, Color3.fromRGB(70, 180, 100), UDim2.new(1, 0, 0, 28), content, UDim2.new(0, 0, 0, yPos))
+    tpToPlayerBtn.Visible = true
 
-    yPos = yPos + 34
+    local tpBtnYPos = yPos
+    yPos = yPos + 32
+
+    -- Update Player Dropdown
+    local function updateDropdown()
+        for _, c in ipairs(dropdownList:GetChildren()) do
+            if c:IsA("TextButton") then 
+                c:Destroy() 
+            end
+        end
+
+        local players = getPlayers()
+        local py = 2
+
+        if #players == 0 then
+            dropdownBtn.Text = "👥 No Players"
+        else
+            dropdownBtn.Text = selectedPlayer and "👥 " .. selectedPlayer.display or "👥 Select Player ▼"
+            
+            for _, playerData in ipairs(players) do
+                local pb = Instance.new("TextButton")
+                pb.Size = UDim2.new(1, -4, 0, 24)
+                pb.Position = UDim2.new(0, 2, 0, py)
+                pb.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+                pb.Text = playerData.display
+                pb.TextColor3 = Color3.fromRGB(255, 255, 255)
+                pb.TextSize = 7
+                pb.Font = Enum.Font.Gotham
+                pb.TextXAlignment = Enum.TextXAlignment.Left
+                pb.Parent = dropdownList
+
+                local pbPad = Instance.new("UIPadding")
+                pbPad.PaddingLeft = UDim.new(0, 4)
+                pbPad.Parent = pb
+
+                local pbCorner = Instance.new("UICorner")
+                pbCorner.CornerRadius = UDim.new(0, 3)
+                pbCorner.Parent = pb
+
+                pb.MouseButton1Click:Connect(function()
+                    selectedPlayer = playerData
+                    dropdownBtn.Text = "👥 " .. playerData.display
+                    dropdownList.Visible = false
+                    dropdownOpen = false
+                    tpToPlayerBtn.Visible = true
+                    notif("✅ Selected: " .. playerData.display)
+                end)
+
+                py = py + 26
+            end
+        end
+
+        dropdownList.CanvasSize = UDim2.new(0, 0, 0, py + 2)
+    end
+
+    -- Dropdown Toggle
+    dropdownBtn.MouseButton1Click:Connect(function()
+        dropdownOpen = not dropdownOpen
+        if dropdownOpen then
+            updateDropdown()
+            dropdownList.Size = UDim2.new(0.60, 0, 0, math.min(120, dropdownList.CanvasSize.Y.Offset))
+            dropdownList.Visible = true
+            tpToPlayerBtn.Visible = false
+        else
+            dropdownList.Visible = false
+            tpToPlayerBtn.Visible = true
+        end
+    end)
+
+    -- Refresh Button Action
+    refreshBtn.MouseButton1Click:Connect(function()
+        updateDropdown()
+        notif("🔄 List refreshed!")
+    end)
 
     -- Wait Time Label
     local waitLabel = Instance.new("TextLabel")
@@ -576,6 +688,7 @@ local function createGUI()
     info.TextYAlignment = Enum.TextYAlignment.Top
     info.Parent = content
 
+    ```lua
     local iCorner = Instance.new("UICorner")
     iCorner.CornerRadius = UDim.new(0, 4)
     iCorner.Parent = info
@@ -652,6 +765,31 @@ local function createGUI()
         pcall(function() GUI:Destroy() end)
     end)
 
+    -- Close dropdown when clicking outside
+    mainFrame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            if dropdownOpen then
+                local mousePos = UserInputService:GetMouseLocation()
+                local dropdownPos = dropdownBtn.AbsolutePosition
+                local dropdownSize = dropdownBtn.AbsoluteSize
+                local listPos = dropdownList.AbsolutePosition
+                local listSize = dropdownList.AbsoluteSize
+                
+                local inDropdownBtn = mousePos.X >= dropdownPos.X and mousePos.X <= dropdownPos.X + dropdownSize.X and
+                                      mousePos.Y >= dropdownPos.Y and mousePos.Y <= dropdownPos.Y + dropdownSize.Y
+                
+                local inDropdownList = mousePos.X >= listPos.X and mousePos.X <= listPos.X + listSize.X and
+                                       mousePos.Y >= listPos.Y and mousePos.Y <= listPos.Y + listSize.Y
+                
+                if not inDropdownBtn and not inDropdownList then
+                    dropdownList.Visible = false
+                    dropdownOpen = false
+                    tpToPlayerBtn.Visible = true
+                end
+            end
+        end
+    end)
+
     -- Make Draggable
     local dragging = false
     local dragInput, dragStart, startPos
@@ -693,6 +831,7 @@ local function createGUI()
             update(input)
         end
     end)
+
     -- Load config after UI is created and update UI
     task.spawn(function()
         task.wait(0.2)
@@ -703,6 +842,9 @@ local function createGUI()
             end
         end
     end)
+
+    -- Initialize dropdown
+    updateDropdown()
 
     return status, startBtn
 end
