@@ -688,7 +688,6 @@ local function createGUI()
     info.TextYAlignment = Enum.TextYAlignment.Top
     info.Parent = content
 
-    ```lua
     local iCorner = Instance.new("UICorner")
     iCorner.CornerRadius = UDim.new(0, 4)
     iCorner.Parent = info
