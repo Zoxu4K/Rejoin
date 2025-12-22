@@ -126,12 +126,15 @@ local function tpPlayer(name)
     return false
 end
 
--- Get Players
+-- Get Players with formatted names
 local function getPlayers()
     local list = {}
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer then
-            table.insert(list, p.Name)
+            local displayName = p.DisplayName
+            local userName = p.Name
+            local formattedName = displayName .. " (@" .. userName .. ")"
+            table.insert(list, {display = formattedName, actualName = userName})
         end
     end
     return list
@@ -198,7 +201,7 @@ end
 
 -- Update UI with loaded config
 local function updateUIWithConfig(homeInput, tujuanInput, waitInputMin, waitInputSec, waitLabel)
-    task.wait(0.1) -- Small delay to ensure UI is ready
+    task.wait(0.1)
     
     if homeCoord then
         homeInput.Text = string.format("%d,%d,%d", homeCoord.x, homeCoord.y, homeCoord.z)
@@ -426,12 +429,25 @@ local function createGUI()
 
     yPos = yPos + 32
 
-    -- Home Input
+    -- Home Section (Button + Input in one row)
+    local testHomeBtn = createBtn("🏠 HOME", function()
+        if homeCoord then
+            if tp(homeCoord.x, homeCoord.y, homeCoord.z) then
+                notif("✅ Teleported to Home!")
+            else
+                notif("❌ Failed to teleport")
+            end
+        else
+            notif("❌ Set Home position first!")
+        end
+    end, Color3.fromRGB(100, 150, 200), UDim2.new(0.28, 0, 0, 28), teleportTab)
+    testHomeBtn.Position = UDim2.new(0, 0, 0, yPos)
+
     local homeInput = Instance.new("TextBox")
-    homeInput.Size = UDim2.new(1, 0, 0, 28)
-    homeInput.Position = UDim2.new(0, 0, 0, yPos)
+    homeInput.Size = UDim2.new(0.70, 0, 0, 28)
+    homeInput.Position = UDim2.new(0.30, 0, 0, yPos)
     homeInput.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-    homeInput.PlaceholderText = "🏠 Paste Home coordinates (x,y,z)"
+    homeInput.PlaceholderText = "Paste Home coordinates (x,y,z)"
     homeInput.Text = ""
     homeInput.TextColor3 = Color3.fromRGB(255, 255, 255)
     homeInput.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
@@ -458,28 +474,25 @@ local function createGUI()
 
     yPos = yPos + 32
 
-    -- Test Home Button
-    local testHomeBtn = createBtn("🏠 TEST HOME POSITION", function()
-        if homeCoord then
-            if tp(homeCoord.x, homeCoord.y, homeCoord.z) then
-                notif("✅ Teleported to Home!")
+    -- Destination Section (Button + Input in one row)
+    local testTujuanBtn = createBtn("🎯 DEST", function()
+        if tujuanCoord then
+            if tp(tujuanCoord.x, tujuanCoord.y, tujuanCoord.z) then
+                notif("✅ Teleported to Destination!")
             else
                 notif("❌ Failed to teleport")
             end
         else
-            notif("❌ Set Home position first!")
+            notif("❌ Set Destination first!")
         end
-    end, Color3.fromRGB(100, 150, 200), nil, teleportTab)
-    testHomeBtn.Position = UDim2.new(0, 0, 0, yPos)
+    end, Color3.fromRGB(200, 120, 80), UDim2.new(0.28, 0, 0, 28), teleportTab)
+    testTujuanBtn.Position = UDim2.new(0, 0, 0, yPos)
 
-    yPos = yPos + 32
-
-    -- Tujuan Input
     local tujuanInput = Instance.new("TextBox")
-    tujuanInput.Size = UDim2.new(1, 0, 0, 28)
-    tujuanInput.Position = UDim2.new(0, 0, 0, yPos)
+    tujuanInput.Size = UDim2.new(0.70, 0, 0, 28)
+    tujuanInput.Position = UDim2.new(0.30, 0, 0, yPos)
     tujuanInput.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-    tujuanInput.PlaceholderText = "🎯 Paste Destination coordinates (x,y,z)"
+    tujuanInput.PlaceholderText = "Paste Destination coordinates (x,y,z)"
     tujuanInput.Text = ""
     tujuanInput.TextColor3 = Color3.fromRGB(255, 255, 255)
     tujuanInput.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
@@ -503,22 +516,6 @@ local function createGUI()
             tujuanInput.Text = tujuanCoord and string.format("%d,%d,%d", tujuanCoord.x, tujuanCoord.y, tujuanCoord.z) or ""
         end
     end)
-
-    yPos = yPos + 32
-
-    -- Test Tujuan Button
-    local testTujuanBtn = createBtn("🎯 TEST DESTINATION", function()
-        if tujuanCoord then
-            if tp(tujuanCoord.x, tujuanCoord.y, tujuanCoord.z) then
-                notif("✅ Teleported to Destination!")
-            else
-                notif("❌ Failed to teleport")
-            end
-        else
-            notif("❌ Set Destination first!")
-        end
-    end, Color3.fromRGB(200, 120, 80), nil, teleportTab)
-    testTujuanBtn.Position = UDim2.new(0, 0, 0, yPos)
 
     yPos = yPos + 36
 
@@ -686,12 +683,12 @@ local function createGUI()
             none.Font = Enum.Font.Gotham
             none.Parent = playerFrame
         else
-            for _, name in ipairs(players) do
+            for _, playerData in ipairs(players) do
                 local pb = Instance.new("TextButton")
                 pb.Size = UDim2.new(1, -8, 0, 28)
                 pb.Position = UDim2.new(0, 4, 0, py)
                 pb.BackgroundColor3 = Color3.fromRGB(70, 130, 220)
-                pb.Text = "👤 " .. name
+                pb.Text = "👤 " .. playerData.display
                 pb.TextColor3 = Color3.fromRGB(255, 255, 255)
                 pb.TextSize = 9
                 pb.Font = Enum.Font.Gotham
@@ -702,8 +699,8 @@ local function createGUI()
                 pbCorner.Parent = pb
 
                 pb.MouseButton1Click:Connect(function()
-                    if tpPlayer(name) then
-                        notif("✅ Teleported to " .. name)
+                    if tpPlayer(playerData.actualName) then
+                        notif("✅ Teleported to " .. playerData.display)
                     else
                         notif("❌ Failed to teleport")
                     end
