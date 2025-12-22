@@ -1,5 +1,5 @@
 
--- Christmas Cave Auto Teleport Script
+-- Christmas Cave & Lochness Auto Teleport Script
 -- Compatible with Delta Executor, Android & PC
 
 local Players = game:GetService("Players")
@@ -11,29 +11,52 @@ local StarterGui = game:GetService("StarterGui")
 -- Variables
 local GUI = nil
 local mainFrame = nil
-local autoEnabled = false
-local isRunning = false
-local jadwal = {"11:00","13:00","15:00","17:00","19:00","21:00","23:00","01:00","03:00","05:00","07:00","09:00"}
-local waitTime = 30 * 60
+local autoXmasEnabled = false
+local autoLochEnabled = false
+local isXmasRunning = false
+local isLochRunning = false
+
+-- Xmas Variables
+local xmasWaitTime = 30 * 60
+local xmasHomeCoord = nil
+local xmasTujuanCoord = nil
+local xmasAutoStartTime = 0
+local xmasEventDuration = 30 * 60
+local xmasJadwal = {"11:00","13:00","15:00","17:00","19:00","21:00","23:00","01:00","03:00","05:00","07:00","09:00"}
+
+-- Lochness Variables
+local lochWaitTime = 10 * 60  -- 10 menit
+local lochHomeCoord = nil
+local lochTujuanCoord = nil
+local lochAutoStartTime = 0
+local lochEventDuration = 10 * 60  -- 10 menit event
+local lochEventInterval = 4 * 60 * 60  -- 4 jam
+local lochLastEventTime = 11 * 3600  -- Default jam 11:00 pagi dalam detik
+
 local copiedCoord = nil
-local homeCoord = nil
-local tujuanCoord = nil
-local currentTab = "teleport"
-local autoStartTime = 0
-local eventDuration = 30 * 60  -- Durasi event dalam detik
+local currentTab = "xmas"
 
 -- Config
-local CONFIG = "XmasConfig.json"
+local CONFIG = "EventAutoConfig.json"
 
 -- Load Config
 local function loadConfig()
     local success = pcall(function()
         if readfile and isfile and isfile(CONFIG) then
             local data = HttpService:JSONDecode(readfile(CONFIG))
-            waitTime = data.waitTime or (30 * 60)
-            eventDuration = data.eventDuration or (30 * 60)
-            homeCoord = data.home
-            tujuanCoord = data.tujuan
+            
+            -- Xmas Config
+            xmasWaitTime = data.xmasWaitTime or (30 * 60)
+            xmasEventDuration = data.xmasEventDuration or (30 * 60)
+            xmasHomeCoord = data.xmasHome
+            xmasTujuanCoord = data.xmasTujuan
+            
+            -- Lochness Config
+            lochWaitTime = data.lochWaitTime or (10 * 60)
+            lochEventDuration = data.lochEventDuration or (10 * 60)
+            lochHomeCoord = data.lochHome
+            lochTujuanCoord = data.lochTujuan
+            lochLastEventTime = data.lochLastEventTime or (11 * 3600)
         end
     end)
     return success
@@ -44,10 +67,18 @@ local function saveConfig()
     local success = pcall(function()
         if writefile then
             writefile(CONFIG, HttpService:JSONEncode({
-                waitTime = waitTime,
-                eventDuration = eventDuration,
-                home = homeCoord,
-                tujuan = tujuanCoord
+                -- Xmas
+                xmasWaitTime = xmasWaitTime,
+                xmasEventDuration = xmasEventDuration,
+                xmasHome = xmasHomeCoord,
+                xmasTujuan = xmasTujuanCoord,
+                
+                -- Lochness
+                lochWaitTime = lochWaitTime,
+                lochEventDuration = lochEventDuration,
+                lochHome = lochHomeCoord,
+                lochTujuan = lochTujuanCoord,
+                lochLastEventTime = lochLastEventTime
             }))
         end
     end)
@@ -97,7 +128,7 @@ end
 local function notif(msg)
     pcall(function()
         StarterGui:SetCore("SendNotification", {
-            Title = "🎄 Xmas Auto",
+            Title = "🎄 Event Auto",
             Text = msg,
             Duration = 3
         })
@@ -106,9 +137,15 @@ end
 
 -- Format Time
 local function fTime(sec)
-    local m = math.floor(sec/60)
+    local h = math.floor(sec/3600)
+    local m = math.floor((sec%3600)/60)
     local s = sec%60
-    return string.format("%02d:%02d", m, s)
+    
+    if h > 0 then
+        return string.format("%dj %02dm %02ds", h, m, s)
+    else
+        return string.format("%02d:%02d", m, s)
+    end
 end
 
 -- Parse Coordinates
@@ -120,7 +157,7 @@ local function parseCoords(text)
     return nil
 end
 
--- Calculate time since event start
+-- Calculate time since event start (Xmas)
 local function getTimeSinceEventStart(eventTime)
     local hour, minute = eventTime:match("(%d+):(%d+)")
     if not hour or not minute then return nil end
@@ -134,7 +171,6 @@ local function getTimeSinceEventStart(eventTime)
     
     local elapsed = nowSeconds - eventSeconds
     
-    -- Handle past midnight case
     if elapsed < 0 then
         elapsed = elapsed + (24 * 3600)
     end
@@ -142,15 +178,65 @@ local function getTimeSinceEventStart(eventTime)
     return elapsed
 end
 
--- Check if currently in event window
-local function isInEventWindow()
-    for _, time in ipairs(jadwal) do
+-- Check if currently in Xmas event window
+local function isInXmasEventWindow()
+    for _, time in ipairs(xmasJadwal) do
         local elapsed = getTimeSinceEventStart(time)
-        if elapsed and elapsed >= 0 and elapsed < eventDuration then
-            return true, eventDuration - elapsed
+        if elapsed and elapsed >= 0 and elapsed < xmasEventDuration then
+            return true, xmasEventDuration - elapsed
         end
     end
     return false, 0
+end
+
+-- Check Lochness event (setiap 4 jam dari jam terakhir)
+local function isInLochEventWindow()
+    local now = os.date("*t")
+    local nowSeconds = now.hour * 3600 + now.min * 60 + now.sec
+    
+    -- Hitung waktu sejak event terakhir
+    local timeSinceLastEvent = nowSeconds - lochLastEventTime
+    
+    -- Handle lewat midnight
+    if timeSinceLastEvent < 0 then
+        timeSinceLastEvent = timeSinceLastEvent + (24 * 3600)
+    end
+    
+    -- Cek apakah sudah waktunya event baru (4 jam)
+    if timeSinceLastEvent >= lochEventInterval then
+        -- Update last event time
+        lochLastEventTime = nowSeconds
+        saveConfig()
+        return true, lochEventDuration
+    end
+    
+    -- Cek apakah masih dalam durasi event (10 menit)
+    if timeSinceLastEvent < lochEventDuration then
+        return true, lochEventDuration - timeSinceLastEvent
+    end
+    
+    return false, 0
+end
+
+-- Get next Lochness event time
+local function getNextLochEvent()
+    local now = os.date("*t")
+    local nowSeconds = now.hour * 3600 + now.min * 60 + now.sec
+    
+    local timeSinceLastEvent = nowSeconds - lochLastEventTime
+    
+    if timeSinceLastEvent < 0 then
+        timeSinceLastEvent = timeSinceLastEvent + (24 * 3600)
+    end
+    
+    -- Jika masih dalam event
+    if timeSinceLastEvent < lochEventDuration then
+        return lochEventDuration - timeSinceLastEvent
+    end
+    
+    -- Hitung waktu sampai event berikutnya
+    local timeUntilNext = lochEventInterval - timeSinceLastEvent
+    return timeUntilNext
 end
 
 -- Create GUI
@@ -160,7 +246,7 @@ local function createGUI()
     end
 
     GUI = Instance.new("ScreenGui")
-    GUI.Name = "XmasGUI"
+    GUI.Name = "EventAutoGUI"
     GUI.ResetOnSpawn = false
     GUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     
@@ -176,8 +262,8 @@ local function createGUI()
     -- Main Frame
     mainFrame = Instance.new("Frame")
     mainFrame.Name = "MainFrame"
-    mainFrame.Size = UDim2.new(0, 420, 0, 485)
-    mainFrame.Position = UDim2.new(0.5, -210, 0.5, -242)
+    mainFrame.Size = UDim2.new(0, 420, 0, 520)
+    mainFrame.Position = UDim2.new(0.5, -210, 0.5, -260)
     mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
     mainFrame.BorderSizePixel = 0
     mainFrame.Active = true
@@ -211,7 +297,7 @@ local function createGUI()
     title.Size = UDim2.new(1, -65, 1, 0)
     title.Position = UDim2.new(0, 8, 0, 0)
     title.BackgroundTransparency = 1
-    title.Text = "🎄 Xmas Cave Auto"
+    title.Text = "🎄 Event Auto Teleport"
     title.TextColor3 = Color3.fromRGB(255, 255, 255)
     title.TextSize = 13
     title.Font = Enum.Font.GothamBold
@@ -291,8 +377,9 @@ local function createGUI()
         return btn
     end
 
-    local teleportBtn = createTabBtn("Teleport", "🚀", 4, "teleport")
-    local playerBtn = createTabBtn("TP Player", "👥", 46, "player")
+    local xmasBtn = createTabBtn("Xmas", "🎄", 4, "xmas")
+    local lochBtn = createTabBtn("Lochness", "🐉", 46, "loch")
+    local playerBtn = createTabBtn("TP Player", "👥", 88, "player")
 
     -- Right Content Frame
     local rightContent = Instance.new("Frame")
@@ -302,32 +389,45 @@ local function createGUI()
     rightContent.BackgroundTransparency = 1
     rightContent.Parent = contentContainer
 
-    -- Status Label (Always visible)
-    local status = Instance.new("TextLabel")
-    status.Name = "Status"
-    status.Size = UDim2.new(1, 0, 0, 38)
-    status.Position = UDim2.new(0, 0, 0, 0)
-    status.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-    status.Text = "⏸️ TIDAK AKTIF\n⏰ 00:00:00"
-    status.TextColor3 = Color3.fromRGB(255, 255, 255)
-    status.TextSize = 11
-    status.Font = Enum.Font.GothamBold
-    status.Parent = rightContent
+    -- Status Labels Container
+    local statusContainer = Instance.new("Frame")
+    statusContainer.Name = "StatusContainer"
+    statusContainer.Size = UDim2.new(1, 0, 0, 76)
+    statusContainer.Position = UDim2.new(0, 0, 0, 0)
+    statusContainer.BackgroundTransparency = 1
+    statusContainer.Parent = rightContent
 
-    local sCorner = Instance.new("UICorner")
-    sCorner.CornerRadius = UDim.new(0, 6)
-    sCorner.Parent = status
+    -- Xmas Status Label
+    local xmasStatus = Instance.new("TextLabel")
+    xmasStatus.Name = "XmasStatus"
+    xmasStatus.Size = UDim2.new(1, 0, 0, 36)
+    xmasStatus.Position = UDim2.new(0, 0, 0, 0)
+    xmasStatus.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    xmasStatus.Text = "🎄 XMAS: ⏸️ OFF\n⏰ 00:00:00"
+    xmasStatus.TextColor3 = Color3.fromRGB(255, 200, 100)
+    xmasStatus.TextSize = 10
+    xmasStatus.Font = Enum.Font.GothamBold
+    xmasStatus.Parent = statusContainer
 
-    -- Teleport Tab Content
-    local teleportTab = Instance.new("Frame")
-    teleportTab.Name = "TeleportTab"
-    teleportTab.Size = UDim2.new(1, 0, 1, -44)
-    teleportTab.Position = UDim2.new(0, 0, 0, 42)
-    teleportTab.BackgroundTransparency = 1
-    teleportTab.Visible = true
-    teleportTab.Parent = rightContent
+    local xsCorner = Instance.new("UICorner")
+    xsCorner.CornerRadius = UDim.new(0, 6)
+    xsCorner.Parent = xmasStatus
 
-    local yPos = 0
+    -- Lochness Status Label
+    local lochStatus = Instance.new("TextLabel")
+    lochStatus.Name = "LochStatus"
+    lochStatus.Size = UDim2.new(1, 0, 0, 36)
+    lochStatus.Position = UDim2.new(0, 0, 0, 40)
+    lochStatus.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    lochStatus.Text = "🐉 LOCH: ⏸️ OFF\n⏰ Next: 0j 00m"
+    lochStatus.TextColor3 = Color3.fromRGB(100, 200, 255)
+    lochStatus.TextSize = 10
+    lochStatus.Font = Enum.Font.GothamBold
+    lochStatus.Parent = statusContainer
+
+    local lsCorner = Instance.new("UICorner")
+    lsCorner.CornerRadius = UDim.new(0, 6)
+    lsCorner.Parent = lochStatus
 
     -- Helper function to create buttons
     local function createBtn(text, callback, color, size, parent)
@@ -347,9 +447,19 @@ local function createGUI()
         b.MouseButton1Click:Connect(callback)
         return b
     end
+    -- XMAS TAB CONTENT
+    local xmasTab = Instance.new("Frame")
+    xmasTab.Name = "XmasTab"
+    xmasTab.Size = UDim2.new(1, 0, 1, -80)
+    xmasTab.Position = UDim2.new(0, 0, 0, 80)
+    xmasTab.BackgroundTransparency = 1
+    xmasTab.Visible = true
+    xmasTab.Parent = rightContent
+
+    local xYPos = 0
 
     -- Copy Koordinat Button
-    local copyBtn = createBtn("📋 COPY KOORDINAT", function()
+    local xmasCopyBtn = createBtn("📋 COPY KOORDINAT", function()
         copiedCoord = getPos()
         if copiedCoord then
             notif("✅ Koordinat di-copy!")
@@ -361,230 +471,480 @@ local function createGUI()
         else
             notif("❌ Gagal copy posisi")
         end
-    end, Color3.fromRGB(70, 150, 230), nil, teleportTab)
-    copyBtn.Position = UDim2.new(0, 0, 0, yPos)
+    end, Color3.fromRGB(70, 150, 230), nil, xmasTab)
+    xmasCopyBtn.Position = UDim2.new(0, 0, 0, xYPos)
 
-    yPos = yPos + 32
+    xYPos = xYPos + 32
 
-    -- Home Input
-    local homeInput = Instance.new("TextBox")
-    homeInput.Size = UDim2.new(1, 0, 0, 28)
-    homeInput.Position = UDim2.new(0, 0, 0, yPos)
-    homeInput.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-    homeInput.PlaceholderText = "Paste koordinat Home (x,y,z)"
-    homeInput.Text = homeCoord and string.format("%d,%d,%d", homeCoord.x, homeCoord.y, homeCoord.z) or ""
-    homeInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-    homeInput.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
-    homeInput.TextSize = 8
-    homeInput.Font = Enum.Font.Gotham
-    homeInput.ClearTextOnFocus = false
-    homeInput.Parent = teleportTab
+    -- Xmas Home Input
+    local xmasHomeInput = Instance.new("TextBox")
+    xmasHomeInput.Size = UDim2.new(1, 0, 0, 28)
+    xmasHomeInput.Position = UDim2.new(0, 0, 0, xYPos)
+    xmasHomeInput.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    xmasHomeInput.PlaceholderText = "Paste koordinat Home (x,y,z)"
+    xmasHomeInput.Text = xmasHomeCoord and string.format("%d,%d,%d", xmasHomeCoord.x, xmasHomeCoord.y, xmasHomeCoord.z) or ""
+    xmasHomeInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+    xmasHomeInput.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+    xmasHomeInput.TextSize = 8
+    xmasHomeInput.Font = Enum.Font.Gotham
+    xmasHomeInput.ClearTextOnFocus = false
+    xmasHomeInput.Parent = xmasTab
 
-    local hCorner = Instance.new("UICorner")
-    hCorner.CornerRadius = UDim.new(0, 5)
-    hCorner.Parent = homeInput
+    local xhCorner = Instance.new("UICorner")
+    xhCorner.CornerRadius = UDim.new(0, 5)
+    xhCorner.Parent = xmasHomeInput
 
-    homeInput.FocusLost:Connect(function()
-        local coords = parseCoords(homeInput.Text)
+    xmasHomeInput.FocusLost:Connect(function()
+        local coords = parseCoords(xmasHomeInput.Text)
         if coords then
-            homeCoord = coords
-            notif("✅ Home di-set!")
+            xmasHomeCoord = coords
+            notif("✅ Xmas Home di-set!")
             saveConfig()
-        elseif homeInput.Text ~= "" then
+        elseif xmasHomeInput.Text ~= "" then
             notif("❌ Format salah! Gunakan: x,y,z")
-            homeInput.Text = homeCoord and string.format("%d,%d,%d", homeCoord.x, homeCoord.y, homeCoord.z) or ""
+            xmasHomeInput.Text = xmasHomeCoord and string.format("%d,%d,%d", xmasHomeCoord.x, xmasHomeCoord.y, xmasHomeCoord.z) or ""
         end
     end)
 
-    yPos = yPos + 32
+    xYPos = xYPos + 32
 
-    -- Test Home Button
-    local testHomeBtn = createBtn("🧪 TEST HOME", function()
-        if homeCoord then
-            if tp(homeCoord.x, homeCoord.y, homeCoord.z) then
-                notif("✅ TP ke Home berhasil!")
+    -- Test Xmas Home Button
+    local xmasTestHomeBtn = createBtn("🧪 TEST HOME", function()
+        if xmasHomeCoord then
+            if tp(xmasHomeCoord.x, xmasHomeCoord.y, xmasHomeCoord.z) then
+                notif("✅ TP ke Xmas Home berhasil!")
             else
-                notif("❌ Gagal TP ke Home")
+                notif("❌ Gagal TP ke Xmas Home")
             end
         else
-            notif("❌ Set koordinat Home dulu!")
+            notif("❌ Set koordinat Xmas Home dulu!")
         end
-    end, Color3.fromRGB(100, 150, 200), nil, teleportTab)
-    testHomeBtn.Position = UDim2.new(0, 0, 0, yPos)
+    end, Color3.fromRGB(100, 150, 200), nil, xmasTab)
+    xmasTestHomeBtn.Position = UDim2.new(0, 0, 0, xYPos)
 
-    yPos = yPos + 32
+    xYPos = xYPos + 32
 
-    -- Tujuan Input
-    local tujuanInput = Instance.new("TextBox")
-    tujuanInput.Size = UDim2.new(1, 0, 0, 28)
-    tujuanInput.Position = UDim2.new(0, 0, 0, yPos)
-    tujuanInput.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-    tujuanInput.PlaceholderText = "Paste koordinat Tujuan (x,y,z)"
-    tujuanInput.Text = tujuanCoord and string.format("%d,%d,%d", tujuanCoord.x, tujuanCoord.y, tujuanCoord.z) or ""
-    tujuanInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-    tujuanInput.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
-    tujuanInput.TextSize = 8
-    tujuanInput.Font = Enum.Font.Gotham
-    tujuanInput.ClearTextOnFocus = false
-    tujuanInput.Parent = teleportTab
+    -- Xmas Tujuan Input
+    local xmasTujuanInput = Instance.new("TextBox")
+    xmasTujuanInput.Size = UDim2.new(1, 0, 0, 28)
+    xmasTujuanInput.Position = UDim2.new(0, 0, 0, xYPos)
+    xmasTujuanInput.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    xmasTujuanInput.PlaceholderText = "Paste koordinat Tujuan (x,y,z)"
+    xmasTujuanInput.Text = xmasTujuanCoord and string.format("%d,%d,%d", xmasTujuanCoord.x, xmasTujuanCoord.y, xmasTujuanCoord.z) or ""
+    xmasTujuanInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+    xmasTujuanInput.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+    xmasTujuanInput.TextSize = 8
+    xmasTujuanInput.Font = Enum.Font.Gotham
+    xmasTujuanInput.ClearTextOnFocus = false
+    xmasTujuanInput.Parent = xmasTab
 
-    local tCorner2 = Instance.new("UICorner")
-    tCorner2.CornerRadius = UDim.new(0, 5)
-    tCorner2.Parent = tujuanInput
+    local xtCorner = Instance.new("UICorner")
+    xtCorner.CornerRadius = UDim.new(0, 5)
+    xtCorner.Parent = xmasTujuanInput
 
-    tujuanInput.FocusLost:Connect(function()
-        local coords = parseCoords(tujuanInput.Text)
+    xmasTujuanInput.FocusLost:Connect(function()
+        local coords = parseCoords(xmasTujuanInput.Text)
         if coords then
-            tujuanCoord = coords
-            notif("✅ Tujuan di-set!")
+            xmasTujuanCoord = coords
+            notif("✅ Xmas Tujuan di-set!")
             saveConfig()
-        elseif tujuanInput.Text ~= "" then
+        elseif xmasTujuanInput.Text ~= "" then
             notif("❌ Format salah! Gunakan: x,y,z")
-            tujuanInput.Text = tujuanCoord and string.format("%d,%d,%d", tujuanCoord.x, tujuanCoord.y, tujuanCoord.z) or ""
+            xmasTujuanInput.Text = xmasTujuanCoord and string.format("%d,%d,%d", xmasTujuanCoord.x, xmasTujuanCoord.y, xmasTujuanCoord.z) or ""
         end
     end)
 
-    yPos = yPos + 32
+    xYPos = xYPos + 32
 
-    -- Test Tujuan Button
-    local testTujuanBtn = createBtn("🧪 TEST TUJUAN", function()
-        if tujuanCoord then
-            if tp(tujuanCoord.x, tujuanCoord.y, tujuanCoord.z) then
-                notif("✅ TP ke Tujuan berhasil!")
+    -- Test Xmas Tujuan Button
+    local xmasTestTujuanBtn = createBtn("🧪 TEST TUJUAN", function()
+        if xmasTujuanCoord then
+            if tp(xmasTujuanCoord.x, xmasTujuanCoord.y, xmasTujuanCoord.z) then
+                notif("✅ TP ke Xmas Tujuan berhasil!")
             else
-                notif("❌ Gagal TP ke Tujuan")
+                notif("❌ Gagal TP ke Xmas Tujuan")
             end
         else
-            notif("❌ Set koordinat Tujuan dulu!")
+            notif("❌ Set koordinat Xmas Tujuan dulu!")
         end
-    end, Color3.fromRGB(200, 120, 80), nil, teleportTab)
-    testTujuanBtn.Position = UDim2.new(0, 0, 0, yPos)
+    end, Color3.fromRGB(200, 120, 80), nil, xmasTab)
+    xmasTestTujuanBtn.Position = UDim2.new(0, 0, 0, xYPos)
 
-    yPos = yPos + 36
-    -- Info Label
-    local info = Instance.new("TextLabel")
-    info.Size = UDim2.new(1, 0, 0, 72)
-    info.Position = UDim2.new(0, 0, 0, yPos)
-    info.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-    info.TextColor3 = Color3.fromRGB(200, 200, 200)
-    info.TextSize = 8
-    info.Font = Enum.Font.Gotham
-    info.TextXAlignment = Enum.TextXAlignment.Left
-    info.TextYAlignment = Enum.TextYAlignment.Top
-    info.Parent = teleportTab
+    xYPos = xYPos + 36
 
-    local iCorner = Instance.new("UICorner")
-    iCorner.CornerRadius = UDim.new(0, 5)
-    iCorner.Parent = info
+    -- Xmas Info Label
+    local xmasInfo = Instance.new("TextLabel")
+    xmasInfo.Size = UDim2.new(1, 0, 0, 72)
+    xmasInfo.Position = UDim2.new(0, 0, 0, xYPos)
+    xmasInfo.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    xmasInfo.TextColor3 = Color3.fromRGB(200, 200, 200)
+    xmasInfo.TextSize = 8
+    xmasInfo.Font = Enum.Font.Gotham
+    xmasInfo.TextXAlignment = Enum.TextXAlignment.Left
+    xmasInfo.TextYAlignment = Enum.TextYAlignment.Top
+    xmasInfo.Parent = xmasTab
 
-    local iPad = Instance.new("UIPadding")
-    iPad.PaddingLeft = UDim.new(0, 6)
-    iPad.PaddingTop = UDim.new(0, 6)
-    iPad.Parent = info
+    local xiCorner = Instance.new("UICorner")
+    xiCorner.CornerRadius = UDim.new(0, 5)
+    xiCorner.Parent = xmasInfo
 
-    info.Text = "⏰ Jadwal:\n11:00, 13:00, 15:00, 17:00, 19:00\n21:00, 23:00, 01:00, 03:00, 05:00\n07:00, 09:00\n\n⏱️ Durasi: 30 menit | 🔄 Home→Tujuan→Home"
+    local xiPad = Instance.new("UIPadding")
+    xiPad.PaddingLeft = UDim.new(0, 6)
+    xiPad.PaddingTop = UDim.new(0, 6)
+    xiPad.Parent = xmasInfo
 
-    yPos = yPos + 76
+    xmasInfo.Text = "⏰ Jadwal:\n11:00, 13:00, 15:00, 17:00, 19:00\n21:00, 23:00, 01:00, 03:00, 05:00\n07:00, 09:00\n\n⏱️ Durasi: 30 menit | 🔄 Home→Tujuan→Home"
 
-    -- Wait Time Label
-    local waitLabel = Instance.new("TextLabel")
-    waitLabel.Size = UDim2.new(1, 0, 0, 18)
-    waitLabel.Position = UDim2.new(0, 0, 0, yPos)
-    waitLabel.BackgroundTransparency = 1
-    waitLabel.Text = "⏱️ Waktu Tunggu: " .. fTime(waitTime)
-    waitLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    waitLabel.TextSize = 9
-    waitLabel.Font = Enum.Font.GothamBold
-    waitLabel.TextXAlignment = Enum.TextXAlignment.Left
-    waitLabel.Parent = teleportTab
+    xYPos = xYPos + 76
 
-    yPos = yPos + 20
+    -- Xmas Wait Time Label
+    local xmasWaitLabel = Instance.new("TextLabel")
+    xmasWaitLabel.Size = UDim2.new(1, 0, 0, 18)
+    xmasWaitLabel.Position = UDim2.new(0, 0, 0, xYPos)
+    xmasWaitLabel.BackgroundTransparency = 1
+    xmasWaitLabel.Text = "⏱️ Waktu Tunggu: " .. fTime(xmasWaitTime)
+    xmasWaitLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    xmasWaitLabel.TextSize = 9
+    xmasWaitLabel.Font = Enum.Font.GothamBold
+    xmasWaitLabel.TextXAlignment = Enum.TextXAlignment.Left
+    xmasWaitLabel.Parent = xmasTab
 
-    -- Wait Time Input (Menit)
-    local waitInputMin = Instance.new("TextBox")
-    waitInputMin.Size = UDim2.new(0.3, 0, 0, 28)
-    waitInputMin.Position = UDim2.new(0, 0, 0, yPos)
-    waitInputMin.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-    waitInputMin.PlaceholderText = "Menit"
-    waitInputMin.Text = tostring(math.floor(waitTime/60))
-    waitInputMin.TextColor3 = Color3.fromRGB(255, 255, 255)
-    waitInputMin.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
-    waitInputMin.TextSize = 9
-    waitInputMin.Font = Enum.Font.Gotham
-    waitInputMin.ClearTextOnFocus = false
-    waitInputMin.Parent = teleportTab
+    xYPos = xYPos + 20
 
-    local wCornerMin = Instance.new("UICorner")
-    wCornerMin.CornerRadius = UDim.new(0, 5)
-    wCornerMin.Parent = waitInputMin
+    -- Xmas Wait Time Inputs
+    local xmasWaitMin = Instance.new("TextBox")
+    xmasWaitMin.Size = UDim2.new(0.3, 0, 0, 28)
+    xmasWaitMin.Position = UDim2.new(0, 0, 0, xYPos)
+    xmasWaitMin.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    xmasWaitMin.PlaceholderText = "Menit"
+    xmasWaitMin.Text = tostring(math.floor(xmasWaitTime/60))
+    xmasWaitMin.TextColor3 = Color3.fromRGB(255, 255, 255)
+    xmasWaitMin.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+    xmasWaitMin.TextSize = 9
+    xmasWaitMin.Font = Enum.Font.Gotham
+    xmasWaitMin.ClearTextOnFocus = false
+    xmasWaitMin.Parent = xmasTab
 
-    -- Wait Time Input (Detik)
-    local waitInputSec = Instance.new("TextBox")
-    waitInputSec.Size = UDim2.new(0.3, 0, 0, 28)
-    waitInputSec.Position = UDim2.new(0.32, 0, 0, yPos)
-    waitInputSec.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-    waitInputSec.PlaceholderText = "Detik"
-    waitInputSec.Text = tostring(waitTime%60)
-    waitInputSec.TextColor3 = Color3.fromRGB(255, 255, 255)
-    waitInputSec.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
-    waitInputSec.TextSize = 9
-    waitInputSec.Font = Enum.Font.Gotham
-    waitInputSec.ClearTextOnFocus = false
-    waitInputSec.Parent = teleportTab
+    local xwmCorner = Instance.new("UICorner")
+    xwmCorner.CornerRadius = UDim.new(0, 5)
+    xwmCorner.Parent = xmasWaitMin
 
-    local wCornerSec = Instance.new("UICorner")
-    wCornerSec.CornerRadius = UDim.new(0, 5)
-    wCornerSec.Parent = waitInputSec
+    local xmasWaitSec = Instance.new("TextBox")
+    xmasWaitSec.Size = UDim2.new(0.3, 0, 0, 28)
+    xmasWaitSec.Position = UDim2.new(0.32, 0, 0, xYPos)
+    xmasWaitSec.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    xmasWaitSec.PlaceholderText = "Detik"
+    xmasWaitSec.Text = tostring(xmasWaitTime%60)
+    xmasWaitSec.TextColor3 = Color3.fromRGB(255, 255, 255)
+    xmasWaitSec.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+    xmasWaitSec.TextSize = 9
+    xmasWaitSec.Font = Enum.Font.Gotham
+    xmasWaitSec.ClearTextOnFocus = false
+    xmasWaitSec.Parent = xmasTab
 
-    -- Set Wait Button
-    local setWaitBtn = createBtn("✅ SET", function()
-        local m = tonumber(waitInputMin.Text) or 0
-        local s = tonumber(waitInputSec.Text) or 0
+    local xwsCorner = Instance.new("UICorner")
+    xwsCorner.CornerRadius = UDim.new(0, 5)
+    xwsCorner.Parent = xmasWaitSec
+
+    local xmasSetWaitBtn = createBtn("✅ SET", function()
+        local m = tonumber(xmasWaitMin.Text) or 0
+        local s = tonumber(xmasWaitSec.Text) or 0
         
         if m >= 0 and s >= 0 and s < 60 and (m > 0 or s > 0) then
-            waitTime = (m * 60) + s
-            waitLabel.Text = "⏱️ Waktu Tunggu: " .. fTime(waitTime)
-            notif("✅ Diset: " .. m .. "m " .. s .. "s")
+            xmasWaitTime = (m * 60) + s
+            xmasWaitLabel.Text = "⏱️ Waktu Tunggu: " .. fTime(xmasWaitTime)
+            notif("✅ Xmas diset: " .. m .. "m " .. s .. "s")
             saveConfig()
         else
             notif("❌ Angka tidak valid!")
         end
-    end, Color3.fromRGB(70, 180, 100), UDim2.new(0.36, 0, 0, 28), teleportTab)
-    setWaitBtn.Position = UDim2.new(0.64, 0, 0, yPos)
+    end, Color3.fromRGB(70, 180, 100), UDim2.new(0.36, 0, 0, 28), xmasTab)
+    xmasSetWaitBtn.Position = UDim2.new(0.64, 0, 0, xYPos)
 
-    yPos = yPos + 32
+    xYPos = xYPos + 32
 
-    -- Start/Stop Button
-    local startBtn = createBtn("▶️ START AUTO", function()
-        if not homeCoord or not tujuanCoord then
-            notif("❌ Set Home & Tujuan dulu!")
+    -- Xmas Start/Stop Button
+    local xmasStartBtn = createBtn("▶️ START XMAS AUTO", function()
+        if not xmasHomeCoord or not xmasTujuanCoord then
+            notif("❌ Set Xmas Home & Tujuan dulu!")
             return
         end
 
-        if isRunning then
-            notif("⏸️ Waktu belum selesai!")
+        if isXmasRunning then
+            notif("⏸️ Xmas sedang berjalan!")
             return
         end
 
-        autoEnabled = not autoEnabled
+        autoXmasEnabled = not autoXmasEnabled
         
-        if autoEnabled then
-            startBtn.Text = "⏸️ STOP AUTO"
-            startBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
-            notif("✅ Auto AKTIF!")
+        if autoXmasEnabled then
+            xmasStartBtn.Text = "⏸️ STOP XMAS AUTO"
+            xmasStartBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
+            notif("✅ Xmas Auto AKTIF!")
         else
-            startBtn.Text = "▶️ START AUTO"
-            startBtn.BackgroundColor3 = Color3.fromRGB(70, 180, 100)
-            notif("⏸️ Auto BERHENTI")
+            xmasStartBtn.Text = "▶️ START XMAS AUTO"
+            xmasStartBtn.BackgroundColor3 = Color3.fromRGB(70, 180, 100)
+            notif("⏸️ Xmas Auto BERHENTI")
         end
-    end, Color3.fromRGB(70, 180, 100), UDim2.new(1, 0, 0, 34), teleportTab)
-    startBtn.Position = UDim2.new(0, 0, 0, yPos)
+    end, Color3.fromRGB(70, 180, 100), UDim2.new(1, 0, 0, 34), xmasTab)
+    xmasStartBtn.Position = UDim2.new(0, 0, 0, xYPos)
 
-    -- Player Tab Content
+    -- LOCHNESS TAB CONTENT
+    local lochTab = Instance.new("Frame")
+    lochTab.Name = "LochTab"
+    lochTab.Size = UDim2.new(1, 0, 1, -80)
+    lochTab.Position = UDim2.new(0, 0, 0, 80)
+    lochTab.BackgroundTransparency = 1
+    lochTab.Visible = false
+    lochTab.Parent = rightContent
+
+    local lYPos = 0
+
+    -- Copy Koordinat Button (Loch)
+    local lochCopyBtn = createBtn("📋 COPY KOORDINAT", function()
+        copiedCoord = getPos()
+        if copiedCoord then
+            notif("✅ Koordinat di-copy!")
+            pcall(function()
+                if setclipboard then
+                    setclipboard(string.format("%d,%d,%d", copiedCoord.x, copiedCoord.y, copiedCoord.z))
+                end
+            end)
+        else
+            notif("❌ Gagal copy posisi")
+        end
+    end, Color3.fromRGB(70, 150, 230), nil, lochTab)
+    lochCopyBtn.Position = UDim2.new(0, 0, 0, lYPos)
+
+    lYPos = lYPos + 32
+
+    -- Loch Home Input
+    local lochHomeInput = Instance.new("TextBox")
+    lochHomeInput.Size = UDim2.new(1, 0, 0, 28)
+    lochHomeInput.Position = UDim2.new(0, 0, 0, lYPos)
+    lochHomeInput.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    lochHomeInput.PlaceholderText = "Paste koordinat Home (x,y,z)"
+    lochHomeInput.Text = lochHomeCoord and string.format("%d,%d,%d", lochHomeCoord.x, lochHomeCoord.y, lochHomeCoord.z) or ""
+    lochHomeInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+    lochHomeInput.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+    lochHomeInput.TextSize = 8
+    lochHomeInput.Font = Enum.Font.Gotham
+    lochHomeInput.ClearTextOnFocus = false
+    lochHomeInput.Parent = lochTab
+
+    local lhCorner = Instance.new("UICorner")
+    lhCorner.CornerRadius = UDim.new(0, 5)
+    lhCorner.Parent = lochHomeInput
+
+    lochHomeInput.FocusLost:Connect(function()
+        local coords = parseCoords(lochHomeInput.Text)
+        if coords then
+            lochHomeCoord = coords
+            notif("✅ Loch Home di-set!")
+            saveConfig()
+        elseif lochHomeInput.Text ~= "" then
+            notif("❌ Format salah! Gunakan: x,y,z")
+            lochHomeInput.Text = lochHomeCoord and string.format("%d,%d,%d", lochHomeCoord.x, lochHomeCoord.y, lochHomeCoord.z) or ""
+        end
+    end)
+
+    lYPos = lYPos + 32
+
+    -- Test Loch Home Button
+    local lochTestHomeBtn = createBtn("🧪 TEST HOME", function()
+        if lochHomeCoord then
+            if tp(lochHomeCoord.x, lochHomeCoord.y, lochHomeCoord.z) then
+                notif("✅ TP ke Loch Home berhasil!")
+            else
+                notif("❌ Gagal TP ke Loch Home")
+            end
+        else
+            notif("❌ Set koordinat Loch Home dulu!")
+        end
+    end, Color3.fromRGB(100, 150, 200), nil, lochTab)
+    lochTestHomeBtn.Position = UDim2.new(0, 0, 0, lYPos)
+
+    lYPos = lYPos + 32
+
+    -- Loch Tujuan Input
+    local lochTujuanInput = Instance.new("TextBox")
+    lochTujuanInput.Size = UDim2.new(1, 0, 0, 28)
+    lochTujuanInput.Position = UDim2.new(0, 0, 0, lYPos)
+    lochTujuanInput.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    lochTujuanInput.PlaceholderText = "Paste koordinat Tujuan (x,y,z)"
+    lochTujuanInput.Text = lochTujuanCoord and string.format("%d,%d,%d", lochTujuanCoord.x, lochTujuanCoord.y, lochTujuanCoord.z) or ""
+    lochTujuanInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+    lochTujuanInput.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+    lochTujuanInput.TextSize = 8
+    lochTujuanInput.Font = Enum.Font.Gotham
+    lochTujuanInput.ClearTextOnFocus = false
+    lochTujuanInput.Parent = lochTab
+
+    local ltCorner = Instance.new("UICorner")
+    ltCorner.CornerRadius = UDim.new(0, 5)
+    ltCorner.Parent = lochTujuanInput
+
+    lochTujuanInput.FocusLost:Connect(function()
+        local coords = parseCoords(lochTujuanInput.Text)
+        if coords then
+            lochTujuanCoord = coords
+            notif("✅ Loch Tujuan di-set!")
+            saveConfig()
+        elseif lochTujuanInput.Text ~= "" then
+            notif("❌ Format salah! Gunakan: x,y,z")
+            lochTujuanInput.Text = lochTujuanCoord and string.format("%d,%d,%d", lochTujuanCoord.x, lochTujuanCoord.y, lochTujuanCoord.z) or ""
+        end
+    end)
+
+    lYPos = lYPos + 32
+
+    -- Test Loch Tujuan Button
+    local lochTestTujuanBtn = createBtn("🧪 TEST TUJUAN", function()
+        if lochTujuanCoord then
+            if tp(lochTujuanCoord.x, lochTujuanCoord.y, lochTujuanCoord.z) then
+                notif("✅ TP ke Loch Tujuan berhasil!")
+            else
+                notif("❌ Gagal TP ke Loch Tujuan")
+            end
+        else
+            notif("❌ Set koordinat Loch Tujuan dulu!")
+        end
+    end, Color3.fromRGB(200, 120, 80), nil, lochTab)
+    lochTestTujuanBtn.Position = UDim2.new(0, 0, 0, lYPos)
+
+    lYPos = lYPos + 36
+    -- Loch Info Label
+    local lochInfo = Instance.new("TextLabel")
+    lochInfo.Size = UDim2.new(1, 0, 0, 72)
+    lochInfo.Position = UDim2.new(0, 0, 0, lYPos)
+    lochInfo.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    lochInfo.TextColor3 = Color3.fromRGB(200, 200, 200)
+    lochInfo.TextSize = 8
+    lochInfo.Font = Enum.Font.Gotham
+    lochInfo.TextXAlignment = Enum.TextXAlignment.Left
+    lochInfo.TextYAlignment = Enum.TextYAlignment.Top
+    lochInfo.Parent = lochTab
+
+    local liCorner = Instance.new("UICorner")
+    liCorner.CornerRadius = UDim.new(0, 5)
+    liCorner.Parent = lochInfo
+
+    local liPad = Instance.new("UIPadding")
+    liPad.PaddingLeft = UDim.new(0, 6)
+    liPad.PaddingTop = UDim.new(0, 6)
+    liPad.Parent = lochInfo
+
+    lochInfo.Text = "⏰ Jadwal: Setiap 4 jam\nEvent pertama: 11:00 (default)\n\n⏱️ Durasi event: 10 menit\nInterval: 4 jam\n\n🔄 Home→Tujuan→Home"
+
+    lYPos = lYPos + 76
+
+    -- Loch Wait Time Label
+    local lochWaitLabel = Instance.new("TextLabel")
+    lochWaitLabel.Size = UDim2.new(1, 0, 0, 18)
+    lochWaitLabel.Position = UDim2.new(0, 0, 0, lYPos)
+    lochWaitLabel.BackgroundTransparency = 1
+    lochWaitLabel.Text = "⏱️ Waktu Tunggu: " .. fTime(lochWaitTime)
+    lochWaitLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    lochWaitLabel.TextSize = 9
+    lochWaitLabel.Font = Enum.Font.GothamBold
+    lochWaitLabel.TextXAlignment = Enum.TextXAlignment.Left
+    lochWaitLabel.Parent = lochTab
+
+    lYPos = lYPos + 20
+
+    -- Loch Wait Time Inputs
+    local lochWaitMin = Instance.new("TextBox")
+    lochWaitMin.Size = UDim2.new(0.3, 0, 0, 28)
+    lochWaitMin.Position = UDim2.new(0, 0, 0, lYPos)
+    lochWaitMin.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    lochWaitMin.PlaceholderText = "Menit"
+    lochWaitMin.Text = tostring(math.floor(lochWaitTime/60))
+    lochWaitMin.TextColor3 = Color3.fromRGB(255, 255, 255)
+    lochWaitMin.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+    lochWaitMin.TextSize = 9
+    lochWaitMin.Font = Enum.Font.Gotham
+    lochWaitMin.ClearTextOnFocus = false
+    lochWaitMin.Parent = lochTab
+
+    local lwmCorner = Instance.new("UICorner")
+    lwmCorner.CornerRadius = UDim.new(0, 5)
+    lwmCorner.Parent = lochWaitMin
+
+    local lochWaitSec = Instance.new("TextBox")
+    lochWaitSec.Size = UDim2.new(0.3, 0, 0, 28)
+    lochWaitSec.Position = UDim2.new(0.32, 0, 0, lYPos)
+    lochWaitSec.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    lochWaitSec.PlaceholderText = "Detik"
+    lochWaitSec.Text = tostring(lochWaitTime%60)
+    lochWaitSec.TextColor3 = Color3.fromRGB(255, 255, 255)
+    lochWaitSec.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+    lochWaitSec.TextSize = 9
+    lochWaitSec.Font = Enum.Font.Gotham
+    lochWaitSec.ClearTextOnFocus = false
+    lochWaitSec.Parent = lochTab
+
+    local lwsCorner = Instance.new("UICorner")
+    lwsCorner.CornerRadius = UDim.new(0, 5)
+    lwsCorner.Parent = lochWaitSec
+
+    local lochSetWaitBtn = createBtn("✅ SET", function()
+        local m = tonumber(lochWaitMin.Text) or 0
+        local s = tonumber(lochWaitSec.Text) or 0
+        
+        if m >= 0 and s >= 0 and s < 60 and (m > 0 or s > 0) then
+            lochWaitTime = (m * 60) + s
+            lochWaitLabel.Text = "⏱️ Waktu Tunggu: " .. fTime(lochWaitTime)
+            notif("✅ Loch diset: " .. m .. "m " .. s .. "s")
+            saveConfig()
+        else
+            notif("❌ Angka tidak valid!")
+        end
+    end, Color3.fromRGB(70, 180, 100), UDim2.new(0.36, 0, 0, 28), lochTab)
+    lochSetWaitBtn.Position = UDim2.new(0.64, 0, 0, lYPos)
+
+    lYPos = lYPos + 32
+
+    -- Reset Loch Timer Button
+    local lochResetBtn = createBtn("🔄 RESET TIMER (11:00)", function()
+        lochLastEventTime = 11 * 3600  -- Reset ke jam 11:00
+        saveConfig()
+        notif("✅ Timer Loch di-reset ke 11:00!")
+    end, Color3.fromRGB(150, 100, 220), nil, lochTab)
+    lochResetBtn.Position = UDim2.new(0, 0, 0, lYPos)
+
+    lYPos = lYPos + 32
+
+    -- Loch Start/Stop Button
+    local lochStartBtn = createBtn("▶️ START LOCH AUTO", function()
+        if not lochHomeCoord or not lochTujuanCoord then
+            notif("❌ Set Loch Home & Tujuan dulu!")
+            return
+        end
+
+        if isLochRunning then
+            notif("⏸️ Loch sedang berjalan!")
+            return
+        end
+
+        autoLochEnabled = not autoLochEnabled
+        
+        if autoLochEnabled then
+            lochStartBtn.Text = "⏸️ STOP LOCH AUTO"
+            lochStartBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
+            notif("✅ Loch Auto AKTIF!")
+        else
+            lochStartBtn.Text = "▶️ START LOCH AUTO"
+            lochStartBtn.BackgroundColor3 = Color3.fromRGB(70, 180, 100)
+            notif("⏸️ Loch Auto BERHENTI")
+        end
+    end, Color3.fromRGB(70, 180, 100), UDim2.new(1, 0, 0, 34), lochTab)
+    lochStartBtn.Position = UDim2.new(0, 0, 0, lYPos)
+
+    -- PLAYER TAB CONTENT
     local playerTab = Instance.new("Frame")
     playerTab.Name = "PlayerTab"
-    playerTab.Size = UDim2.new(1, 0, 1, -44)
-    playerTab.Position = UDim2.new(0, 0, 0, 42)
+    playerTab.Size = UDim2.new(1, 0, 1, -80)
+    playerTab.Position = UDim2.new(0, 0, 0, 80)
     playerTab.BackgroundTransparency = 1
     playerTab.Visible = false
     playerTab.Parent = rightContent
@@ -670,20 +1030,27 @@ local function createGUI()
         currentTab = tabName
         
         -- Hide all tabs
-        teleportTab.Visible = false
+        xmasTab.Visible = false
+        lochTab.Visible = false
         playerTab.Visible = false
         
         -- Reset button colors
-        teleportBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+        xmasBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+        lochBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
         playerBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-        teleportBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+        xmasBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+        lochBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
         playerBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
         
         -- Show selected tab
-        if tabName == "teleport" then
-            teleportTab.Visible = true
-            teleportBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-            teleportBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        if tabName == "xmas" then
+            xmasTab.Visible = true
+            xmasBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+            xmasBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        elseif tabName == "loch" then
+            lochTab.Visible = true
+            lochBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+            lochBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
         elseif tabName == "player" then
             playerTab.Visible = true
             playerBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
@@ -692,8 +1059,12 @@ local function createGUI()
         end
     end
 
-    teleportBtn.MouseButton1Click:Connect(function()
-        switchTab("teleport")
+    xmasBtn.MouseButton1Click:Connect(function()
+        switchTab("xmas")
+    end)
+
+    lochBtn.MouseButton1Click:Connect(function()
+        switchTab("loch")
     end)
 
     playerBtn.MouseButton1Click:Connect(function()
@@ -701,7 +1072,7 @@ local function createGUI()
     end)
 
     -- Initialize first tab
-    switchTab("teleport")
+    switchTab("xmas")
 
     -- Menu Button (for minimize)
     local menuBtn = Instance.new("TextButton")
@@ -733,8 +1104,10 @@ local function createGUI()
     end)
 
     closeBtn.MouseButton1Click:Connect(function()
-        autoEnabled = false
-        isRunning = false
+        autoXmasEnabled = false
+        autoLochEnabled = false
+        isXmasRunning = false
+        isLochRunning = false
         notif("👋 Script ditutup")
         task.wait(0.5)
         pcall(function() GUI:Destroy() end)
@@ -782,81 +1155,149 @@ local function createGUI()
         end
     end)
 
-    return status, startBtn
+    return xmasStatus, lochStatus, xmasStartBtn, lochStartBtn
 end
 
--- Auto Teleport Logic
-local statusLabel, startBtn = createGUI()
+-- Create GUI
+local xmasStatusLabel, lochStatusLabel, xmasStartBtn, lochStartBtn = createGUI()
 
--- Update Time with Seconds
+-- Update Status with Seconds
 task.spawn(function()
     while task.wait(1) do
-        if statusLabel then
+        if xmasStatusLabel then
             local timeStr = os.date("%H:%M:%S")
-            if autoEnabled then
-                if isRunning then
+            if autoXmasEnabled then
+                if isXmasRunning then
                     -- Status will be updated by main logic
                 else
-                    statusLabel.Text = "▶️ AKTIF - Menunggu jadwal\n⏰ " .. timeStr
+                    xmasStatusLabel.Text = "🎄 XMAS: ▶️ AKTIF\n⏰ " .. timeStr
                 end
             else
-                statusLabel.Text = "⏸️ TIDAK AKTIF\n⏰ " .. timeStr
+                xmasStatusLabel.Text = "🎄 XMAS: ⏸️ OFF\n⏰ " .. timeStr
+            end
+        end
+        
+        if lochStatusLabel then
+            local nextEvent = getNextLochEvent()
+            if autoLochEnabled then
+                if isLochRunning then
+                    -- Status will be updated by main logic
+                else
+                    lochStatusLabel.Text = "🐉 LOCH: ▶️ AKTIF\n⏰ Next: " .. fTime(math.floor(nextEvent))
+                end
+            else
+                lochStatusLabel.Text = "🐉 LOCH: ⏸️ OFF\n⏰ Next: " .. fTime(math.floor(nextEvent))
+            end
+        end
+    end
+end)
+-- Main Xmas Auto Logic
+task.spawn(function()
+    while task.wait(1) do
+        if autoXmasEnabled and not isXmasRunning then
+            -- Cek apakah sedang dalam window event
+            local inEvent, remainingTime = isInXmasEventWindow()
+            
+            if inEvent and remainingTime > 0 then
+                isXmasRunning = true
+                xmasAutoStartTime = tick()
+                
+                if xmasHomeCoord and xmasTujuanCoord then
+                    xmasStatusLabel.Text = "🎄 XMAS: ▶️ TP ke TUJUAN\n⏰ " .. os.date("%H:%M:%S")
+                    notif("🎄 TP ke Christmas Cave! Sisa: " .. fTime(math.floor(remainingTime)))
+                    
+                    if tp(xmasTujuanCoord.x, xmasTujuanCoord.y, xmasTujuanCoord.z) then
+                        notif("✅ Sampai Xmas Cave!")
+                        
+                        -- Gunakan sisa waktu yang lebih kecil antara xmasWaitTime dan remainingTime
+                        local actualWaitTime = math.min(xmasWaitTime, remainingTime)
+                        local endTime = tick() + actualWaitTime
+                        
+                        while tick() < endTime and autoXmasEnabled do
+                            local left = math.floor(endTime - tick())
+                            xmasStatusLabel.Text = "🎄 XMAS: ⏸️ TUNGGU\n⏰ Sisa: " .. fTime(left)
+                            task.wait(1)
+                        end
+                        
+                        if autoXmasEnabled then
+                            xmasStatusLabel.Text = "🎄 XMAS: ▶️ KE HOME\n⏰ " .. os.date("%H:%M:%S")
+                            notif("🏠 Kembali ke Xmas Home!")
+                            
+                            tp(xmasHomeCoord.x, xmasHomeCoord.y, xmasHomeCoord.z)
+                            notif("✅ Sampai Xmas Home!")
+                        end
+                    else
+                        notif("❌ Gagal TP Xmas")
+                    end
+                end
+                
+                isXmasRunning = false
+                xmasAutoStartTime = 0
+                task.wait(5)
+            end
+        elseif not autoXmasEnabled and isXmasRunning then
+            -- Jika auto dicancel saat masih running
+            local elapsed = tick() - xmasAutoStartTime
+            local remaining = xmasWaitTime - elapsed
+            
+            if remaining > 0 then
+                xmasStatusLabel.Text = "🎄 XMAS: ⏸️ BELUM SELESAI\n⏰ Sisa: " .. fTime(math.floor(remaining))
             end
         end
     end
 end)
 
--- Main Auto Logic
+-- Main Lochness Auto Logic
 task.spawn(function()
     while task.wait(1) do
-        if autoEnabled and not isRunning then
+        if autoLochEnabled and not isLochRunning then
             -- Cek apakah sedang dalam window event
-            local inEvent, remainingTime = isInEventWindow()
+            local inEvent, remainingTime = isInLochEventWindow()
             
             if inEvent and remainingTime > 0 then
-                isRunning = true
-                autoStartTime = tick()
+                isLochRunning = true
+                lochAutoStartTime = tick()
                 
-                if homeCoord and tujuanCoord then
-                    statusLabel.Text = "▶️ TP ke TUJUAN...\n⏰ " .. os.date("%H:%M:%S")
-                    notif("🎄 TP ke Christmas Cave! Sisa: " .. fTime(math.floor(remainingTime)))
+                if lochHomeCoord and lochTujuanCoord then
+                    lochStatusLabel.Text = "🐉 LOCH: ▶️ TP ke TUJUAN\n⏰ " .. os.date("%H:%M:%S")
+                    notif("🐉 TP ke Lochness! Sisa: " .. fTime(math.floor(remainingTime)))
                     
-                    if tp(tujuanCoord.x, tujuanCoord.y, tujuanCoord.z) then
-                        notif("✅ Sampai tujuan!")
+                    if tp(lochTujuanCoord.x, lochTujuanCoord.y, lochTujuanCoord.z) then
+                        notif("✅ Sampai Lochness!")
                         
-                        -- Gunakan sisa waktu yang lebih kecil antara waitTime dan remainingTime
-                        local actualWaitTime = math.min(waitTime, remainingTime)
+                        -- Gunakan sisa waktu yang lebih kecil antara lochWaitTime dan remainingTime
+                        local actualWaitTime = math.min(lochWaitTime, remainingTime)
                         local endTime = tick() + actualWaitTime
                         
-                        while tick() < endTime and autoEnabled do
+                        while tick() < endTime and autoLochEnabled do
                             local left = math.floor(endTime - tick())
-                            statusLabel.Text = "⏸️ MENUNGGU\n⏰ Sisa: " .. fTime(left)
+                            lochStatusLabel.Text = "🐉 LOCH: ⏸️ TUNGGU\n⏰ Sisa: " .. fTime(left)
                             task.wait(1)
                         end
                         
-                        if autoEnabled then
-                            statusLabel.Text = "▶️ KEMBALI ke HOME...\n⏰ " .. os.date("%H:%M:%S")
-                            notif("🏠 Kembali ke Home!")
+                        if autoLochEnabled then
+                            lochStatusLabel.Text = "🐉 LOCH: ▶️ KE HOME\n⏰ " .. os.date("%H:%M:%S")
+                            notif("🏠 Kembali ke Loch Home!")
                             
-                            tp(homeCoord.x, homeCoord.y, homeCoord.z)
-                            notif("✅ Sampai Home!")
+                            tp(lochHomeCoord.x, lochHomeCoord.y, lochHomeCoord.z)
+                            notif("✅ Sampai Loch Home!")
                         end
                     else
-                        notif("❌ Gagal TP")
+                        notif("❌ Gagal TP Loch")
                     end
                 end
                 
-                isRunning = false
-                autoStartTime = 0
+                isLochRunning = false
+                lochAutoStartTime = 0
                 task.wait(5)
             end
-        elseif not autoEnabled and isRunning then
-            -- Jika auto dicancel saat masih running, load sisa waktu
-            local elapsed = tick() - autoStartTime
-            local remaining = waitTime - elapsed
+        elseif not autoLochEnabled and isLochRunning then
+            -- Jika auto dicancel saat masih running
+            local elapsed = tick() - lochAutoStartTime
+            local remaining = lochWaitTime - elapsed
             
             if remaining > 0 then
-                statusLabel.Text = "⏸️ WAKTU BELUM SELESAI\n⏰ Sisa: " .. fTime(math.floor(remaining))
+                lochStatusLabel.Text = "🐉 LOCH: ⏸️ BELUM SELESAI\n⏰ Sisa: " .. fTime(math.floor(remaining))
             end
         end
     end
@@ -864,5 +1305,5 @@ end)
 
 -- Initialize
 loadConfig()
-notif("🎄 Xmas Script Loaded!")
-print("🎄 Christmas Cave Script Successfully Loaded!")
+notif("🎄 Event Auto Script Loaded!")
+print("🎄 Christmas & Lochness Auto Script Successfully Loaded!")
