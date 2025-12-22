@@ -1,6 +1,6 @@
 
 -- Christmas Cave Auto Teleport Script
--- Compatible with Delta Executor, Android & PC
+-- Enhanced version with better config loading and English UI
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -20,35 +20,79 @@ local homeCoord = nil
 local tujuanCoord = nil
 local currentTab = "teleport"
 local autoStartTime = 0
-local eventDuration = 30 * 60  -- Durasi event dalam detik
+local eventDuration = 30 * 60
+local configLoaded = false
 
 -- Config
 local CONFIG = "XmasConfig.json"
 
--- Load Config
+-- Load Config with retry and validation
 local function loadConfig()
-    local success = pcall(function()
-        if readfile and isfile and isfile(CONFIG) then
-            local data = HttpService:JSONDecode(readfile(CONFIG))
-            waitTime = data.waitTime or (30 * 60)
-            eventDuration = data.eventDuration or (30 * 60)
-            homeCoord = data.home
-            tujuanCoord = data.tujuan
+    local maxRetries = 3
+    local retryDelay = 0.5
+    
+    for attempt = 1, maxRetries do
+        local success, result = pcall(function()
+            if readfile and isfile and isfile(CONFIG) then
+                local rawData = readfile(CONFIG)
+                if rawData and rawData ~= "" then
+                    local data = HttpService:JSONDecode(rawData)
+                    
+                    -- Validate and load data
+                    if data.waitTime and type(data.waitTime) == "number" then
+                        waitTime = data.waitTime
+                    end
+                    
+                    if data.eventDuration and type(data.eventDuration) == "number" then
+                        eventDuration = data.eventDuration
+                    end
+                    
+                    if data.home and type(data.home) == "table" and data.home.x and data.home.y and data.home.z then
+                        homeCoord = {
+                            x = tonumber(data.home.x),
+                            y = tonumber(data.home.y),
+                            z = tonumber(data.home.z)
+                        }
+                    end
+                    
+                    if data.tujuan and type(data.tujuan) == "table" and data.tujuan.x and data.tujuan.y and data.tujuan.z then
+                        tujuanCoord = {
+                            x = tonumber(data.tujuan.x),
+                            y = tonumber(data.tujuan.y),
+                            z = tonumber(data.tujuan.z)
+                        }
+                    end
+                    
+                    return true
+                end
+            end
+            return false
+        end)
+        
+        if success and result then
+            configLoaded = true
+            return true
         end
-    end)
-    return success
+        
+        if attempt < maxRetries then
+            task.wait(retryDelay)
+        end
+    end
+    
+    return false
 end
 
--- Save Config
+-- Save Config with validation
 local function saveConfig()
     local success = pcall(function()
         if writefile then
-            writefile(CONFIG, HttpService:JSONEncode({
+            local data = {
                 waitTime = waitTime,
                 eventDuration = eventDuration,
                 home = homeCoord,
                 tujuan = tujuanCoord
-            }))
+            }
+            writefile(CONFIG, HttpService:JSONEncode(data))
         end
     end)
     return success
@@ -134,7 +178,6 @@ local function getTimeSinceEventStart(eventTime)
     
     local elapsed = nowSeconds - eventSeconds
     
-    -- Handle past midnight case
     if elapsed < 0 then
         elapsed = elapsed + (24 * 3600)
     end
@@ -151,6 +194,23 @@ local function isInEventWindow()
         end
     end
     return false, 0
+end
+
+-- Update UI with loaded config
+local function updateUIWithConfig(homeInput, tujuanInput, waitInputMin, waitInputSec, waitLabel)
+    task.wait(0.1) -- Small delay to ensure UI is ready
+    
+    if homeCoord then
+        homeInput.Text = string.format("%d,%d,%d", homeCoord.x, homeCoord.y, homeCoord.z)
+    end
+    
+    if tujuanCoord then
+        tujuanInput.Text = string.format("%d,%d,%d", tujuanCoord.x, tujuanCoord.y, tujuanCoord.z)
+    end
+    
+    waitInputMin.Text = tostring(math.floor(waitTime/60))
+    waitInputSec.Text = tostring(waitTime%60)
+    waitLabel.Text = "⏱️ Wait Time: " .. fTime(waitTime)
 end
 
 -- Create GUI
@@ -211,7 +271,7 @@ local function createGUI()
     title.Size = UDim2.new(1, -65, 1, 0)
     title.Position = UDim2.new(0, 8, 0, 0)
     title.BackgroundTransparency = 1
-    title.Text = "🎄 Xmas Cave Auto"
+    title.Text = "🎄 XMAS AUTO | v1.1"
     title.TextColor3 = Color3.fromRGB(255, 255, 255)
     title.TextSize = 13
     title.Font = Enum.Font.GothamBold
@@ -258,7 +318,7 @@ local function createGUI()
     contentContainer.BackgroundTransparency = 1
     contentContainer.Parent = mainFrame
 
-    -- Left Menu (Tab Buttons)
+    -- Left Menu
     local leftMenu = Instance.new("Frame")
     leftMenu.Name = "LeftMenu"
     leftMenu.Size = UDim2.new(0, 95, 1, 0)
@@ -291,7 +351,7 @@ local function createGUI()
         return btn
     end
 
-    local teleportBtn = createTabBtn("Teleport", "🚀", 4, "teleport")
+    local teleportBtn = createTabBtn("Teleport", "🎯", 4, "teleport")
     local playerBtn = createTabBtn("TP Player", "👥", 46, "player")
 
     -- Right Content Frame
@@ -302,13 +362,13 @@ local function createGUI()
     rightContent.BackgroundTransparency = 1
     rightContent.Parent = contentContainer
 
-    -- Status Label (Always visible)
+    -- Status Label
     local status = Instance.new("TextLabel")
     status.Name = "Status"
     status.Size = UDim2.new(1, 0, 0, 38)
     status.Position = UDim2.new(0, 0, 0, 0)
     status.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-    status.Text = "⏸️ TIDAK AKTIF\n⏰ 00:00:00"
+    status.Text = "⏸️ INACTIVE\n⏰ 00:00:00"
     status.TextColor3 = Color3.fromRGB(255, 255, 255)
     status.TextSize = 11
     status.Font = Enum.Font.GothamBold
@@ -348,18 +408,18 @@ local function createGUI()
         return b
     end
 
-    -- Copy Koordinat Button
-    local copyBtn = createBtn("📋 COPY KOORDINAT", function()
+    -- Copy Button
+    local copyBtn = createBtn("📋 COPY CURRENT POSITION", function()
         copiedCoord = getPos()
         if copiedCoord then
-            notif("✅ Koordinat di-copy!")
+            notif("✅ Position copied!")
             pcall(function()
                 if setclipboard then
                     setclipboard(string.format("%d,%d,%d", copiedCoord.x, copiedCoord.y, copiedCoord.z))
                 end
             end)
         else
-            notif("❌ Gagal copy posisi")
+            notif("❌ Failed to copy position")
         end
     end, Color3.fromRGB(70, 150, 230), nil, teleportTab)
     copyBtn.Position = UDim2.new(0, 0, 0, yPos)
@@ -371,8 +431,8 @@ local function createGUI()
     homeInput.Size = UDim2.new(1, 0, 0, 28)
     homeInput.Position = UDim2.new(0, 0, 0, yPos)
     homeInput.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-    homeInput.PlaceholderText = "Paste koordinat Home (x,y,z)"
-    homeInput.Text = homeCoord and string.format("%d,%d,%d", homeCoord.x, homeCoord.y, homeCoord.z) or ""
+    homeInput.PlaceholderText = "🏠 Paste Home coordinates (x,y,z)"
+    homeInput.Text = ""
     homeInput.TextColor3 = Color3.fromRGB(255, 255, 255)
     homeInput.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
     homeInput.TextSize = 8
@@ -388,10 +448,10 @@ local function createGUI()
         local coords = parseCoords(homeInput.Text)
         if coords then
             homeCoord = coords
-            notif("✅ Home di-set!")
+            notif("✅ Home position set!")
             saveConfig()
         elseif homeInput.Text ~= "" then
-            notif("❌ Format salah! Gunakan: x,y,z")
+            notif("❌ Invalid format! Use: x,y,z")
             homeInput.Text = homeCoord and string.format("%d,%d,%d", homeCoord.x, homeCoord.y, homeCoord.z) or ""
         end
     end)
@@ -399,15 +459,15 @@ local function createGUI()
     yPos = yPos + 32
 
     -- Test Home Button
-    local testHomeBtn = createBtn("🧪 TEST HOME", function()
+    local testHomeBtn = createBtn("🏠 TEST HOME POSITION", function()
         if homeCoord then
             if tp(homeCoord.x, homeCoord.y, homeCoord.z) then
-                notif("✅ TP ke Home berhasil!")
+                notif("✅ Teleported to Home!")
             else
-                notif("❌ Gagal TP ke Home")
+                notif("❌ Failed to teleport")
             end
         else
-            notif("❌ Set koordinat Home dulu!")
+            notif("❌ Set Home position first!")
         end
     end, Color3.fromRGB(100, 150, 200), nil, teleportTab)
     testHomeBtn.Position = UDim2.new(0, 0, 0, yPos)
@@ -419,8 +479,8 @@ local function createGUI()
     tujuanInput.Size = UDim2.new(1, 0, 0, 28)
     tujuanInput.Position = UDim2.new(0, 0, 0, yPos)
     tujuanInput.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-    tujuanInput.PlaceholderText = "Paste koordinat Tujuan (x,y,z)"
-    tujuanInput.Text = tujuanCoord and string.format("%d,%d,%d", tujuanCoord.x, tujuanCoord.y, tujuanCoord.z) or ""
+    tujuanInput.PlaceholderText = "🎯 Paste Destination coordinates (x,y,z)"
+    tujuanInput.Text = ""
     tujuanInput.TextColor3 = Color3.fromRGB(255, 255, 255)
     tujuanInput.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
     tujuanInput.TextSize = 8
@@ -436,10 +496,10 @@ local function createGUI()
         local coords = parseCoords(tujuanInput.Text)
         if coords then
             tujuanCoord = coords
-            notif("✅ Tujuan di-set!")
+            notif("✅ Destination set!")
             saveConfig()
         elseif tujuanInput.Text ~= "" then
-            notif("❌ Format salah! Gunakan: x,y,z")
+            notif("❌ Invalid format! Use: x,y,z")
             tujuanInput.Text = tujuanCoord and string.format("%d,%d,%d", tujuanCoord.x, tujuanCoord.y, tujuanCoord.z) or ""
         end
     end)
@@ -447,20 +507,21 @@ local function createGUI()
     yPos = yPos + 32
 
     -- Test Tujuan Button
-    local testTujuanBtn = createBtn("🧪 TEST TUJUAN", function()
+    local testTujuanBtn = createBtn("🎯 TEST DESTINATION", function()
         if tujuanCoord then
             if tp(tujuanCoord.x, tujuanCoord.y, tujuanCoord.z) then
-                notif("✅ TP ke Tujuan berhasil!")
+                notif("✅ Teleported to Destination!")
             else
-                notif("❌ Gagal TP ke Tujuan")
+                notif("❌ Failed to teleport")
             end
         else
-            notif("❌ Set koordinat Tujuan dulu!")
+            notif("❌ Set Destination first!")
         end
     end, Color3.fromRGB(200, 120, 80), nil, teleportTab)
     testTujuanBtn.Position = UDim2.new(0, 0, 0, yPos)
 
     yPos = yPos + 36
+
     -- Info Label
     local info = Instance.new("TextLabel")
     info.Size = UDim2.new(1, 0, 0, 72)
@@ -482,7 +543,7 @@ local function createGUI()
     iPad.PaddingTop = UDim.new(0, 6)
     iPad.Parent = info
 
-    info.Text = "⏰ Jadwal:\n11:00, 13:00, 15:00, 17:00, 19:00\n21:00, 23:00, 01:00, 03:00, 05:00\n07:00, 09:00\n\n⏱️ Durasi: 30 menit | 🔄 Home→Tujuan→Home"
+    info.Text = "📅 Schedule:\n11:00, 13:00, 15:00, 17:00, 19:00\n21:00, 23:00, 01:00, 03:00, 05:00\n07:00, 09:00\n\n⏱️ Duration: 30 min | 🔄 Home→Dest→Home"
 
     yPos = yPos + 76
 
@@ -491,7 +552,7 @@ local function createGUI()
     waitLabel.Size = UDim2.new(1, 0, 0, 18)
     waitLabel.Position = UDim2.new(0, 0, 0, yPos)
     waitLabel.BackgroundTransparency = 1
-    waitLabel.Text = "⏱️ Waktu Tunggu: " .. fTime(waitTime)
+    waitLabel.Text = "⏱️ Wait Time: " .. fTime(waitTime)
     waitLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
     waitLabel.TextSize = 9
     waitLabel.Font = Enum.Font.GothamBold
@@ -500,12 +561,12 @@ local function createGUI()
 
     yPos = yPos + 20
 
-    -- Wait Time Input (Menit)
+    -- Wait Time Input (Minutes)
     local waitInputMin = Instance.new("TextBox")
     waitInputMin.Size = UDim2.new(0.3, 0, 0, 28)
     waitInputMin.Position = UDim2.new(0, 0, 0, yPos)
     waitInputMin.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-    waitInputMin.PlaceholderText = "Menit"
+    waitInputMin.PlaceholderText = "Minutes"
     waitInputMin.Text = tostring(math.floor(waitTime/60))
     waitInputMin.TextColor3 = Color3.fromRGB(255, 255, 255)
     waitInputMin.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
@@ -518,12 +579,12 @@ local function createGUI()
     wCornerMin.CornerRadius = UDim.new(0, 5)
     wCornerMin.Parent = waitInputMin
 
-    -- Wait Time Input (Detik)
+    -- Wait Time Input (Seconds)
     local waitInputSec = Instance.new("TextBox")
     waitInputSec.Size = UDim2.new(0.3, 0, 0, 28)
     waitInputSec.Position = UDim2.new(0.32, 0, 0, yPos)
     waitInputSec.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-    waitInputSec.PlaceholderText = "Detik"
+    waitInputSec.PlaceholderText = "Seconds"
     waitInputSec.Text = tostring(waitTime%60)
     waitInputSec.TextColor3 = Color3.fromRGB(255, 255, 255)
     waitInputSec.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
@@ -543,11 +604,11 @@ local function createGUI()
         
         if m >= 0 and s >= 0 and s < 60 and (m > 0 or s > 0) then
             waitTime = (m * 60) + s
-            waitLabel.Text = "⏱️ Waktu Tunggu: " .. fTime(waitTime)
-            notif("✅ Diset: " .. m .. "m " .. s .. "s")
+            waitLabel.Text = "⏱️ Wait Time: " .. fTime(waitTime)
+            notif("✅ Set: " .. m .. "m " .. s .. "s")
             saveConfig()
         else
-            notif("❌ Angka tidak valid!")
+            notif("❌ Invalid numbers!")
         end
     end, Color3.fromRGB(70, 180, 100), UDim2.new(0.36, 0, 0, 28), teleportTab)
     setWaitBtn.Position = UDim2.new(0.64, 0, 0, yPos)
@@ -557,25 +618,25 @@ local function createGUI()
     -- Start/Stop Button
     local startBtn = createBtn("▶️ START AUTO", function()
         if not homeCoord or not tujuanCoord then
-            notif("❌ Set Home & Tujuan dulu!")
+            notif("❌ Set Home & Destination first!")
             return
         end
 
         if isRunning then
-            notif("⏸️ Waktu belum selesai!")
+            notif("⏸️ Wait time not finished!")
             return
         end
 
         autoEnabled = not autoEnabled
         
         if autoEnabled then
-            startBtn.Text = "⏸️ STOP AUTO"
+            startBtn.Text = "⏹️ STOP AUTO"
             startBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
-            notif("✅ Auto AKTIF!")
+            notif("✅ Auto ENABLED!")
         else
             startBtn.Text = "▶️ START AUTO"
             startBtn.BackgroundColor3 = Color3.fromRGB(70, 180, 100)
-            notif("⏸️ Auto BERHENTI")
+            notif("⏸️ Auto STOPPED")
         end
     end, Color3.fromRGB(70, 180, 100), UDim2.new(1, 0, 0, 34), teleportTab)
     startBtn.Position = UDim2.new(0, 0, 0, yPos)
@@ -603,8 +664,7 @@ local function createGUI()
     local pCorner = Instance.new("UICorner")
     pCorner.CornerRadius = UDim.new(0, 5)
     pCorner.Parent = playerFrame
-
-    -- Update Player List Function
+    -- Update Player List
     local function updatePlayers()
         for _, c in ipairs(playerFrame:GetChildren()) do
             if c:IsA("TextButton") or c:IsA("TextLabel") then 
@@ -620,7 +680,7 @@ local function createGUI()
             none.Size = UDim2.new(1, -8, 0, 26)
             none.Position = UDim2.new(0, 4, 0, 4)
             none.BackgroundTransparency = 1
-            none.Text = "Tidak ada player lain"
+            none.Text = "No other players found"
             none.TextColor3 = Color3.fromRGB(150, 150, 150)
             none.TextSize = 9
             none.Font = Enum.Font.Gotham
@@ -643,9 +703,9 @@ local function createGUI()
 
                 pb.MouseButton1Click:Connect(function()
                     if tpPlayer(name) then
-                        notif("✅ TP ke " .. name)
+                        notif("✅ Teleported to " .. name)
                     else
-                        notif("❌ Gagal TP")
+                        notif("❌ Failed to teleport")
                     end
                 end)
 
@@ -659,7 +719,7 @@ local function createGUI()
     -- Refresh Player Button
     local refreshBtn = createBtn("🔄 REFRESH PLAYER LIST", function()
         updatePlayers()
-        notif("✅ List di-refresh")
+        notif("✅ List refreshed")
     end, Color3.fromRGB(150, 100, 220), UDim2.new(1, 0, 0, 32), playerTab)
     refreshBtn.Position = UDim2.new(0, 0, 1, -32)
 
@@ -724,7 +784,7 @@ local function createGUI()
     minBtn.MouseButton1Click:Connect(function()
         mainFrame.Visible = false
         menuBtn.Visible = true
-        notif("📦 Diminimize")
+        notif("📦 Minimized")
     end)
 
     menuBtn.MouseButton1Click:Connect(function()
@@ -735,7 +795,7 @@ local function createGUI()
     closeBtn.MouseButton1Click:Connect(function()
         autoEnabled = false
         isRunning = false
-        notif("👋 Script ditutup")
+        notif("👋 Script closed")
         task.wait(0.5)
         pcall(function() GUI:Destroy() end)
     end)
@@ -782,6 +842,17 @@ local function createGUI()
         end
     end)
 
+    -- Load config after UI is created and update UI
+    task.spawn(function()
+        task.wait(0.2) -- Wait for UI to fully render
+        if loadConfig() then
+            updateUIWithConfig(homeInput, tujuanInput, waitInputMin, waitInputSec, waitLabel)
+            if configLoaded then
+                notif("✅ Config loaded successfully!")
+            end
+        end
+    end)
+
     return status, startBtn
 end
 
@@ -797,10 +868,10 @@ task.spawn(function()
                 if isRunning then
                     -- Status will be updated by main logic
                 else
-                    statusLabel.Text = "▶️ AKTIF - Menunggu jadwal\n⏰ " .. timeStr
+                    statusLabel.Text = "▶️ ACTIVE - Waiting for schedule\n⏰ " .. timeStr
                 end
             else
-                statusLabel.Text = "⏸️ TIDAK AKTIF\n⏰ " .. timeStr
+                statusLabel.Text = "⏸️ INACTIVE\n⏰ " .. timeStr
             end
         end
     end
@@ -810,7 +881,7 @@ end)
 task.spawn(function()
     while task.wait(1) do
         if autoEnabled and not isRunning then
-            -- Cek apakah sedang dalam window event
+            -- Check if currently in event window
             local inEvent, remainingTime = isInEventWindow()
             
             if inEvent and remainingTime > 0 then
@@ -818,31 +889,31 @@ task.spawn(function()
                 autoStartTime = tick()
                 
                 if homeCoord and tujuanCoord then
-                    statusLabel.Text = "▶️ TP ke TUJUAN...\n⏰ " .. os.date("%H:%M:%S")
-                    notif("🎄 TP ke Christmas Cave! Sisa: " .. fTime(math.floor(remainingTime)))
+                    statusLabel.Text = "▶️ TP to DESTINATION...\n⏰ " .. os.date("%H:%M:%S")
+                    notif("🎄 TP to Christmas Cave! Remaining: " .. fTime(math.floor(remainingTime)))
                     
                     if tp(tujuanCoord.x, tujuanCoord.y, tujuanCoord.z) then
-                        notif("✅ Sampai tujuan!")
+                        notif("✅ Arrived at destination!")
                         
-                        -- Gunakan sisa waktu yang lebih kecil antara waitTime dan remainingTime
+                        -- Use the smaller time between waitTime and remainingTime
                         local actualWaitTime = math.min(waitTime, remainingTime)
                         local endTime = tick() + actualWaitTime
                         
                         while tick() < endTime and autoEnabled do
                             local left = math.floor(endTime - tick())
-                            statusLabel.Text = "⏸️ MENUNGGU\n⏰ Sisa: " .. fTime(left)
+                            statusLabel.Text = "⏳ WAITING\n⏰ Time left: " .. fTime(left)
                             task.wait(1)
                         end
                         
                         if autoEnabled then
-                            statusLabel.Text = "▶️ KEMBALI ke HOME...\n⏰ " .. os.date("%H:%M:%S")
-                            notif("🏠 Kembali ke Home!")
+                            statusLabel.Text = "▶️ RETURNING to HOME...\n⏰ " .. os.date("%H:%M:%S")
+                            notif("🏠 Returning to Home!")
                             
                             tp(homeCoord.x, homeCoord.y, homeCoord.z)
-                            notif("✅ Sampai Home!")
+                            notif("✅ Arrived at Home!")
                         end
                     else
-                        notif("❌ Gagal TP")
+                        notif("❌ Failed to teleport")
                     end
                 end
                 
@@ -851,18 +922,17 @@ task.spawn(function()
                 task.wait(5)
             end
         elseif not autoEnabled and isRunning then
-            -- Jika auto dicancel saat masih running, load sisa waktu
+            -- If auto is canceled while still running, show remaining time
             local elapsed = tick() - autoStartTime
             local remaining = waitTime - elapsed
             
             if remaining > 0 then
-                statusLabel.Text = "⏸️ WAKTU BELUM SELESAI\n⏰ Sisa: " .. fTime(math.floor(remaining))
+                statusLabel.Text = "⏸️ WAIT TIME NOT FINISHED\n⏰ Remaining: " .. fTime(math.floor(remaining))
             end
         end
     end
 end)
 
 -- Initialize
-loadConfig()
 notif("🎄 Xmas Script Loaded!")
 print("🎄 Christmas Cave Script Successfully Loaded!")
